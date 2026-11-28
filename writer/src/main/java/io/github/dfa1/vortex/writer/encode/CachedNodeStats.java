@@ -58,7 +58,9 @@ final class CachedNodeStats {
 
     /// The stats of the `vortex.bool` array that holds a nullable array's validity. Rust builds it
     /// from the mask: an array of one value is constant, a mixed one carries both bounds, its
-    /// valid-row count as the sum and no nulls.
+    /// valid-row count as the sum and no nulls. Rust 0.95 also runs a mixed one through its
+    /// compressor (`compress_bitmap`), whose `exact_uncompressed_size` leaves its byte size on it
+    /// when it stays a bitmap; a constant one is settled before that is measured.
     ///
     /// @param validity per-row validity
     /// @return the validity child's stats
@@ -73,7 +75,7 @@ final class CachedNodeStats {
             return new NodeStats(null, null, true, null, null, null, null, null);
         }
         return new NodeStats(ProtoScalarValue.ofBoolValue(false), ProtoScalarValue.ofBoolValue(true), null, null, null,
-                0L, null, null, ProtoScalarValue.ofUint64Value(valid));
+                0L, (validity.length + 7L) / 8, null, ProtoScalarValue.ofUint64Value(valid));
     }
 
     private static boolean retainsIntegerStats(EncodingId root) {

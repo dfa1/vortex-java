@@ -200,9 +200,11 @@ class NodeStatsInteropIntegrationTest {
         }
     }
 
-    /// The lines of a column's stats-table segment: the last flat under the zoned layout.
+    /// The lines of a column's stats-table segment: the last flat under the zoned layout. A constant
+    /// column has none: Rust 0.95 writes it as one constant chunk, not zoned.
     private static List<String> zoneTable(List<String> column) {
-        return column.subList(column.lastIndexOf("    vortex.flat"), column.size());
+        int start = column.lastIndexOf("    vortex.flat");
+        return start < 0 ? List.of() : column.subList(start, column.size());
     }
 
     /// The tree lines of each top-level column, in file order.

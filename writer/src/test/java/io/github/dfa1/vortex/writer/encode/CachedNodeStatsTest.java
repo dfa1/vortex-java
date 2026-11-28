@@ -86,13 +86,13 @@ class CachedNodeStatsTest {
     }
 
     @Test
-    void validityBitmap_mixedCarriesBoundsAndTheValidCount() {
-        // Given / When
+    void validityBitmap_mixedCarriesBoundsTheValidCountAndItsByteSize() {
+        // Given / When — Rust 0.95's compressor measures the bitmap it keeps: 4 rows, one byte
         NodeStats result = CachedNodeStats.ofValidity(new boolean[]{true, false, true, true});
 
         // Then
         assertThat(result).isEqualTo(new NodeStats(ProtoScalarValue.ofBoolValue(false),
-                ProtoScalarValue.ofBoolValue(true), null, null, null, 0L, null, null, ProtoScalarValue.ofUint64Value(3L)));
+                ProtoScalarValue.ofBoolValue(true), null, null, null, 0L, 1L, null, ProtoScalarValue.ofUint64Value(3L)));
     }
 
     @Test
