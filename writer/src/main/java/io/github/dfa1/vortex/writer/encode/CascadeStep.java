@@ -60,7 +60,24 @@ public record CascadeStep(
         if (!applicable || BitmapCompressor.isAllValid(validity)) {
             return this;
         }
-        EncodeResult bool = BitmapCompressor.compress(validity, ctx);
+        return withValidityChild(BitmapCompressor.compress(validity, ctx), validity);
+    }
+
+    /// This step with `validity` rebuilt from its mask, as Rust's `Validity::from_mask` does: no
+    /// child when every row is valid, else a plain `vortex.bool`. Rust's `fsst_compress` stores
+    /// its codes' validity so, whatever bitmap compression ran before it.
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return a copy of this step with the validity child, or this step when every row is valid
+    public CascadeStep withMaskValidity(boolean[] validity, EncodeContext ctx) {
+        if (!applicable || BitmapCompressor.allTrue(validity)) {
+            return this;
+        }
+        return withValidityChild(BitmapCompressor.maskBitmap(validity, ctx), validity);
+    }
+
+    private CascadeStep withValidityChild(EncodeResult bool, boolean[] validity) {
         EncodeResult validityChild = new EncodeResult(EncodeResult.validityNode(bool.rootNode(), validity),
                 bool.encodedBuffers(), null, null);
         int index = partialRoot.children().length;

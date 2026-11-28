@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -28,6 +29,10 @@ final class BitmapCompressor {
 
     /// Rust's `MAX_CASCADE`, less the bitmap's own level.
     private static final int CHILD_DEPTH = 2;
+
+    /// Runs from which Rust's run-end bool decode prefills the majority value instead of appending
+    /// (`PREFILL_RUN_THRESHOLD` in `runend/decompress_bool.rs`).
+    private static final int PREFILL_RUN_THRESHOLD = 32;
 
     private BitmapCompressor() {
     }
@@ -85,8 +90,58 @@ final class BitmapCompressor {
     /// @param validity per-row validity
     /// @return `true` when the array gets no validity child
     static boolean isAllValid(boolean[] validity) {
-        return (validity.length + 7) / 8 > CascadingCompressor.CONSTANT_BOOL_BYTES
-                && validity[0] && SimdOperationsSupport.preferred().allEqual(validity);
+        return (validity.length + 7) / 8 > CascadingCompressor.CONSTANT_BOOL_BYTES && allTrue(validity);
+    }
+
+    /// Whether every row is valid, as Rust's `Mask::AllTrue`.
+    ///
+    /// @param validity per-row validity
+    /// @return `true` when no row is null
+    static boolean allTrue(boolean[] validity) {
+        return validity.length == 0 || validity[0] && SimdOperationsSupport.preferred().allEqual(validity);
+    }
+
+    /// Rust's `Validity::from_mask` after the bitmap was compressed and decoded back, as
+    /// `fsst_compress` rebuilds its codes' validity: a plain bitmap whose padding bits past the
+    /// last row are what that decode leaves. A sparse with a `true` fill decodes from an all-set
+    /// buffer (`BitBuffer::full`), as does a run-end of 32 runs or more whose true runs outnumber
+    /// its false ones (`decode_bool_non_nullable` prefills the majority); every other decode
+    /// appends bits to zeroed bytes, as Java packs them.
+    ///
+    /// @param validity per-row validity, with at least one null
+    /// @param ctx      the encode context of the array the validity belongs to
+    /// @return the plain bitmap
+    static EncodeResult maskBitmap(boolean[] validity, EncodeContext ctx) {
+        EncodeResult bitmap = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
+        int tail = validity.length % 8;
+        if (tail != 0 && decodesPaddingSet(validity, compress(validity, ctx))) {
+            MemorySegment bits = bitmap.buffers().getFirst();
+            long last = bits.byteSize() - 1;
+            bits.set(ValueLayout.JAVA_BYTE, last, (byte) (bits.get(ValueLayout.JAVA_BYTE, last) | (0xFF << tail)));
+        }
+        return bitmap;
+    }
+
+    private static boolean decodesPaddingSet(boolean[] validity, EncodeResult compressed) {
+        EncodingId id = compressed.rootNode().encodingId();
+        int trueCount = 0;
+        int trueRuns = 0;
+        int runs = 0;
+        for (int i = 0; i < validity.length; i++) {
+            if (validity[i]) {
+                trueCount++;
+            }
+            if (i == 0 || validity[i] != validity[i - 1]) {
+                runs++;
+                if (validity[i]) {
+                    trueRuns++;
+                }
+            }
+        }
+        if (id.equals(EncodingId.VORTEX_SPARSE)) {
+            return trueCount > validity.length / 2;
+        }
+        return id.equals(EncodingId.VORTEX_RUNEND) && runs >= PREFILL_RUN_THRESHOLD && trueRuns > runs - trueRuns;
     }
 
     /// `BoolSparseScheme`: the majority value as the fill, the other rows' indices as the patches,

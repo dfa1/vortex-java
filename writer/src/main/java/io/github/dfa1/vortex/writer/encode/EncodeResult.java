@@ -108,6 +108,19 @@ public record EncodeResult(
         return withValidityChild(new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx), validity);
     }
 
+    /// This result with `validity` rebuilt from its mask, as Rust's `Validity::from_mask`: no child
+    /// when every row is valid, else a plain bitmap (see [CascadeStep#withMaskValidity]).
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return a copy of this result with the bitmap child, or this result when every row is valid
+    EncodeResult withMaskValidity(boolean[] validity, EncodeContext ctx) {
+        if (BitmapCompressor.allTrue(validity)) {
+            return this;
+        }
+        return withValidityChild(BitmapCompressor.maskBitmap(validity, ctx), validity);
+    }
+
     private EncodeResult withValidityChild(EncodeResult bool, boolean[] validity) {
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
         children[children.length - 1] = validityNode(

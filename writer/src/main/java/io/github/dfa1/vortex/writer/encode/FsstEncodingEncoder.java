@@ -57,8 +57,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
-    /// A nullable text array keeps its validity as a third child, a `vortex.bool`, as Rust's
-    /// `fsst_compress` keeps it on the codes; the symbol table is trained on the valid rows only
+    /// A nullable text array keeps its validity as a third child, a plain `vortex.bool`, as Rust's
+    /// `fsst_compress` rebuilds it on the codes from the rows' mask (`Validity::from_mask`): the
+    /// bitmap compression Rust's FSST scheme runs first does not survive, and an all-valid array
+    /// has no validity. The symbol table is trained on the valid rows only
     /// (`fsst_train_compressor`), and a null row is compressed as an empty one.
     @Override
     public boolean acceptsNullable(DType dtype) {
@@ -71,7 +73,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         if (data instanceof NullableData nullable) {
             VarBinBytes.Rows rows = VarBinBytes.toContiguous(nullable.values());
             return toEncodeResult(compress(nullable.values(), nullable.validity(), rows, arena), arena,
-                    ZoneMapStats.of(dtype.withNullable(false), nullable)).withValidity(nullable.validity(), ctx);
+                    ZoneMapStats.of(dtype.withNullable(false), nullable)).withMaskValidity(nullable.validity(), ctx);
         }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         return toEncodeResult(compress(data, null, rows, arena), arena, VarBinEncodingEncoder.textMinMax(dtype, data, rows));
@@ -139,7 +141,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             VarBinBytes.Rows rows = VarBinBytes.toContiguous(nullable.values());
             Fsst c = compress(nullable.values(), nullable.validity(), rows, ctx.arena());
             return cascadeStep(c, ZoneMapStats.of(dtype.withNullable(false), nullable))
-                    .withValidity(nullable.validity(), ctx);
+                    .withMaskValidity(nullable.validity(), ctx);
         }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         return cascadeStep(compress(data, null, rows, ctx.arena()), VarBinEncodingEncoder.textMinMax(dtype, data, rows));
