@@ -67,7 +67,13 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         if (!(dtype instanceof DType.Extension ext)) {
             throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
         }
-        if (data instanceof NullableData) {
+        // Rust compresses the storage as it compresses any array (compress_canonical), so a
+        // nullable primitive storage keeps its validity in the encoding that stores its values
+        // rather than in a vortex.masked; only an all-null one is a null constant.
+        // ponytail: a nullable fixed-size-list storage (uuid) stays masked, as the list cascade
+        // takes no validity; move it here when FixedSizeListEncodingEncoder does
+        if (data instanceof NullableData(var _, var validity)
+                && (MaskedEncodingEncoder.isNullConstant(validity, ctx) || !(ext.storageDType() instanceof DType.Primitive))) {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
@@ -87,8 +93,12 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
     /// @param data    the storage-shaped values being encoded
     /// @return the [MinMax] of encoded scalars, or `null`
     private static MinMax storageStats(DType storage, Object data) {
-        return storage instanceof DType.Primitive(PType ptype, boolean _)
-                ? PrimitiveEncodingEncoder.minMaxStats(ptype, data)
-                : null;
+        if (!(storage instanceof DType.Primitive(PType ptype, boolean _))) {
+            return null;
+        }
+        if (data instanceof NullableData) {
+            return ZoneMapStats.of(storage, data);
+        }
+        return PrimitiveEncodingEncoder.minMaxStats(ptype, data);
     }
 }

@@ -199,6 +199,24 @@ class ExtEncodingEncoderTest {
             assertThat(result.partialRoot().children()).hasSize(1);
         }
 
+        /// Rust compresses a nullable timestamp's storage like any nullable primitive, its bitmap
+        /// in the encoding that stores the values; a terminal vortex.masked over it cost FoR and
+        /// made datetimeparts look smaller than the storage it loses to in Rust 0.95.
+        @Test
+        void encodeCascade_nullablePrimitiveStorageIsAnOpenChildWithItsValidity() {
+            // Given
+            NullableData data = new NullableData(new long[]{100L, 0L, 300L, 400L}, new boolean[]{true, false, true, true});
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64.withNullable(true),
+                    TIMESTAMP_MS, true);
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.isTerminal()).isFalse();
+            assertThat(result.openChildren().getFirst().childData()).isSameAs(data);
+        }
+
         @Test
         void encodeCascade_rejectsNonExtensionDtype() {
             // Given / When / Then
