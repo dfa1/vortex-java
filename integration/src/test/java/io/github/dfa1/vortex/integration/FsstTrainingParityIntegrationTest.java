@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
@@ -51,8 +52,10 @@ class FsstTrainingParityIntegrationTest {
 
     static Stream<Arguments> shapes() {
         return Stream.of(
-                shape("urls", 5000, i -> "https://example.com/products/" + Long.toHexString(mix(i)) + "/detail?ref=" + i % 97),
-                shape("emails", 5000, i -> "user." + Long.toHexString(mix(i)) + "@mail-" + i % 17 + ".example.com"),
+                // over 16 KiB, so FSST trains on a sample of it; at 5000 rows of urls or emails Rust 0.95
+                // picks OnPair, which a sample charged only its share of the token dictionary favors
+                shape("urls", 2000, i -> "https://example.com/products/" + Long.toHexString(mix(i)) + "/detail?ref=" + i % 97),
+                shape("uuids", 5000, i -> new UUID(mix(i), mix(i + 77)).toString()),
                 shape("urls small", 400, i -> "http://www.example.net/a/" + Long.toHexString(mix(i)) + "/index.html"),
                 // under 16 KiB: taken whole, and the last generation pruned
                 shape("emails whole", 250, i -> "user." + Long.toHexString(mix(i)) + "@mail-" + i % 17 + ".example.com"));
