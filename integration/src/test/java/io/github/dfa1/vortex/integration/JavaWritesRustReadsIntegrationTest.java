@@ -2394,8 +2394,8 @@ class JavaWritesRustReadsIntegrationTest {
 
     @Test
     void invalidBuiltInExtensionDtype_refusedByJavaAndRust(@TempDir Path tmp) throws IOException {
-        // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("Timestamp
-        // storage dtype must be i64"). Java used to write and read it.
+        // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("vortex.timestamp
+        // storage must be i64, got i32" since 0.95). Java used to write and read it.
         DType.Extension invalid = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I32,
                 new io.github.dfa1.vortex.core.model.TimestampMetadata(io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null),
                 false);
@@ -2429,7 +2429,7 @@ class JavaWritesRustReadsIntegrationTest {
                 .hasMessageContaining("storage dtype must be I64");
         String uri = file.toAbsolutePath().toUri().toString();
         assertThatThrownBy(() -> DataSource.open(SESSION, uri).scan(ScanOptions.of()))
-                .hasMessageContaining("Timestamp storage dtype must be i64");
+                .hasMessageContaining("vortex.timestamp storage must be i64");
     }
 
     @Test
