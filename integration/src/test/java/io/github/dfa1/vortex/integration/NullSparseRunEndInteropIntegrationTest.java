@@ -151,13 +151,14 @@ class NullSparseRunEndInteropIntegrationTest {
     /// produces that shape.
     @Test
     void jniNullFillSparse_utf8_nullRowsDecodeNull(@TempDir Path tmp) throws IOException {
-        // Given — a nullable utf8 column, ~99% null with a few scattered distinct strings.
+        // Given — a nullable utf8 column, 95% null with scattered distinct strings. At 99% null Rust
+        // 0.95's probe admits it to a dict layout, whose codes are the sparse array instead
         Schema schema = new Schema(List.of(Field.nullable("v", new ArrowType.Utf8())));
         String[] expected = new String[ROWS];
         Path file = tmp.resolve("null_fill_sparse_utf8.vtx");
         writeJni(file, schema, (root, i) -> {
             VarCharVector vec = (VarCharVector) root.getVector("v");
-            if (i % 97 == 0) {
+            if (i % 20 == 0) {
                 String value = "x" + i;
                 expected[i] = value;
                 vec.setSafe(i, value.getBytes(StandardCharsets.UTF_8));
