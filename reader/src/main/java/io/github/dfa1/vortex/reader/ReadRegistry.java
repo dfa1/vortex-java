@@ -314,9 +314,7 @@ public final class ReadRegistry {
         Array[] children = new Array[node.children().length];
         for (int i = 0; i < children.length; i++) {
             ArrayNode childNode = node.children()[i];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, ctx.dtype(), ctx.rowCount(),
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            DecodeContext childCtx = ctx.derive(childNode, ctx.dtype(), ctx.rowCount());
             children[i] = decodeUnknown(childCtx, childNode);
         }
         return new UnknownArray(

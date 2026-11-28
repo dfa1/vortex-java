@@ -39,9 +39,7 @@ public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
         DType elementType = fsl.elementType();
 
         ArrayNode elemNode = ctx.node().children()[0];
-        var elemCtx = new DecodeContext(
-                elemNode, elementType, elemLen,
-                ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+        var elemCtx = ctx.derive(elemNode, elementType, elemLen);
         Array elements = ctx.registry().decode(elemCtx);
 
         // A nullable list carries its validity as a second child, not under a vortex.masked

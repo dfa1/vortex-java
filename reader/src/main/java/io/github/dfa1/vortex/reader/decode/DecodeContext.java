@@ -18,9 +18,11 @@ import java.lang.foreign.SegmentAllocator;
 /// @param node           the array node describing this encoding's tree structure
 /// @param dtype          logical type expected for the decoded array
 /// @param rowCount       number of logical rows to decode
-/// @param segmentBuffers all segment buffers for the current flat segment, indexed by segment position
-/// @param registry       read registry used for recursive child decoding
-/// @param arena          allocator for decode output; lifetime matches the current chunk epoch
+/// @param segmentBuffers    all segment buffers for the current flat segment, indexed by segment position
+/// @param registry          read registry used for recursive child decoding
+/// @param arena             allocator for decode output; lifetime matches the current chunk epoch
+/// @param bufferAlignments  the alignment in bytes each segment buffer declares, indexed as
+///                          `segmentBuffers`, or `null` when unknown (a context built by hand)
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record DecodeContext(
         ArrayNode node,
@@ -28,14 +30,38 @@ public record DecodeContext(
         long rowCount,
         MemorySegment[] segmentBuffers,
         ReadRegistry registry,
-        SegmentAllocator arena) {
+        SegmentAllocator arena,
+        int[] bufferAlignments) {
+
+    /// A context whose buffers declare no alignment, so [#bufferAligned(int, int)] trusts them.
+    ///
+    /// @param node           the array node describing this encoding's tree structure
+    /// @param dtype          logical type expected for the decoded array
+    /// @param rowCount       number of logical rows to decode
+    /// @param segmentBuffers all segment buffers for the current flat segment, indexed by segment position
+    /// @param registry       read registry used for recursive child decoding
+    /// @param arena          allocator for decode output; lifetime matches the current chunk epoch
+    public DecodeContext(ArrayNode node, DType dtype, long rowCount, MemorySegment[] segmentBuffers,
+                         ReadRegistry registry, SegmentAllocator arena) {
+        this(node, dtype, rowCount, segmentBuffers, registry, arena, null);
+    }
+
+    /// A context for another node over the same segment buffers, such as a child.
+    ///
+    /// @param node     the node to decode
+    /// @param dtype    logical type expected for the decoded array
+    /// @param rowCount number of logical rows to decode
+    /// @return the context, sharing this one's buffers, their alignments, registry and arena
+    public DecodeContext derive(ArrayNode node, DType dtype, long rowCount) {
+        return new DecodeContext(node, dtype, rowCount, segmentBuffers, registry, arena, bufferAlignments);
+    }
 
     /// Recursively decode child `i` using this context's dtype and row count.
     ///
     /// @param i zero-based child index within this node's children array
     /// @return the decoded [Array] for child `i`
     public Array decodeChild(int i) {
-        var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
+        var childCtx = derive(child(i), dtype, rowCount);
         return registry.decode(childCtx);
     }
 
@@ -49,7 +75,7 @@ public record DecodeContext(
     /// @param rowCount number of logical rows for the child
     /// @return the decoded [Array] for child `i`
     public Array decodeChild(int i, DType dtype, long rowCount) {
-        var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
+        var childCtx = derive(child(i), dtype, rowCount);
         return registry.decode(childCtx);
     }
 
@@ -73,7 +99,7 @@ public record DecodeContext(
     /// @return the primary [MemorySegment] of the decoded child
     /// @throws io.github.dfa1.vortex.core.error.VortexException if the segment has neither shape
     public MemorySegment decodeChildSegment(int i, DType dtype, long rowCount) {
-        var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
+        var childCtx = derive(child(i), dtype, rowCount);
         MemorySegment segment = registry.decodeAsSegment(childCtx);
         if (dtype instanceof DType.Primitive p) {
             SegmentBroadcast.capacity(segment, p.ptype().byteSize(), rowCount);
@@ -91,7 +117,7 @@ public record DecodeContext(
     /// @param bufferPosition zero-based index into the child's `bufferIndices` array
     /// @return the child's [MemorySegment] at that position
     MemorySegment childBuffer(int i, int bufferPosition) {
-        var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
+        var childCtx = derive(child(i), dtype, rowCount);
         return childCtx.buffer(bufferPosition);
     }
 
@@ -142,6 +168,22 @@ public record DecodeContext(
     /// @param i zero-based index into this node's `bufferIndices` array
     /// @return the [MemorySegment] for the referenced segment buffer
     public MemorySegment buffer(int i) {
+        return segmentBuffers[segmentIndex(i)];
+    }
+
+    /// Whether the buffer at position `i` declares at least `alignment` bytes of alignment, as
+    /// Rust checks a fixed-width buffer against its value type (`DecimalData::validate`). A
+    /// context without declared alignments trusts every buffer.
+    ///
+    /// @param i         zero-based index into this node's `bufferIndices` array
+    /// @param alignment the alignment in bytes the buffer's values need
+    /// @return `true` when the declared alignment is at least `alignment`, or is unknown
+    public boolean bufferAligned(int i, int alignment) {
+        int segmentIndex = segmentIndex(i);
+        return bufferAlignments == null || bufferAlignments[segmentIndex] >= alignment;
+    }
+
+    private int segmentIndex(int i) {
         int[] bufferIndices = node.bufferIndices();
         if (i < 0 || i >= bufferIndices.length) {
             throw new VortexException(node.encodingId(),
@@ -152,7 +194,7 @@ public record DecodeContext(
             throw new VortexException(node.encodingId(),
                     "buffer index " + segmentIndex + " out of bounds for " + bufferCount() + " segment(s)");
         }
-        return segmentBuffers[segmentIndex];
+        return segmentIndex;
     }
 
     /// Returns the encoding-specific metadata bytes for this node, or `null` if absent.
