@@ -31,9 +31,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// Barred from a dict's codes child: `vortex.dict` because a dictionary of codes is just
     /// another indirection the reader would have to unwrap, and `vortex.sequence` because codes are
     /// dictionary positions — describing them as an arithmetic sequence adds a level without
-    /// compressing anything (issue #410).
+    /// compressing anything (issue #410). `fastlanes.for` too, as Rust's `FoRScheme` bars itself
+    /// anywhere below dict codes: codes start at 0, and the rule also reaches their descendants,
+    /// such as a run-end's ends.
     private static final Set<EncodingId> CODES_EXCLUDED =
-            Set.of(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+            Set.of(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE, EncodingId.FASTLANES_FOR);
 
     /// A dictionary encoder for every primitive and string dtype.
     public DictEncodingEncoder() {

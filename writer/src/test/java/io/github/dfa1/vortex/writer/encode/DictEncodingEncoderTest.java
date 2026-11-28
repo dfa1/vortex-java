@@ -273,12 +273,12 @@ class DictEncodingEncoderTest {
         // Then — both children are open, as in Rust (`compress_child` for the values and the codes),
         // so a float pool goes through ALP instead of being written raw. The codes bar a dictionary
         // of codes and a sequence over them (codes are dictionary positions, so an arithmetic
-        // description adds a level without compressing anything — issue #410); the values only bar
-        // a second dictionary
+        // description adds a level without compressing anything — issue #410) and FoR anywhere
+        // below them (Rust's `FoRScheme` pull rule); the values only bar a second dictionary
         assertThat(result.ownedBytes()).isZero();
         assertThat(result.openChildren()).hasSize(2);
-        assertThat(result.openChildren().get(0).excluded())
-            .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+        assertThat(result.openChildren().get(0).excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_DICT,
+                EncodingId.VORTEX_SEQUENCE, EncodingId.FASTLANES_FOR);
         assertThat(result.openChildren().get(1).excluded())
             .containsExactly(EncodingId.VORTEX_DICT);
         assertThat((int[]) result.openChildren().get(1).childData()).containsExactly(10, 20, 30);
@@ -294,8 +294,8 @@ class DictEncodingEncoderTest {
 
         // Then — codes bar sequence as above, while the values pool only bars a second dict: the
         // per-slot exclusion exists precisely because two children of one encoding differ here
-        assertThat(result.openChildren().get(0).excluded())
-            .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+        assertThat(result.openChildren().get(0).excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_DICT,
+                EncodingId.VORTEX_SEQUENCE, EncodingId.FASTLANES_FOR);
         assertThat(result.openChildren().get(1).excluded())
             .containsExactly(EncodingId.VORTEX_DICT);
     }
