@@ -50,13 +50,14 @@ public record CascadeStep(
     /// compresses a bitmap, as `EncodeResult.withValidity` does for a result: where Rust's string
     /// encodings (FSST on its codes, OnPair) keep the validity of a nullable array. The bitmap is an
     /// already encoded last slot, so its buffer follows the other children's, in Rust's tree order.
-    /// A step that is not applicable is returned unchanged.
+    /// A step that is not applicable, or a validity Rust drops as all valid
+    /// ([BitmapCompressor#isAllValid(boolean[])]), is returned unchanged.
     ///
     /// @param validity per-row validity
     /// @param ctx      the encode context
     /// @return a copy of this step with the validity child
     public CascadeStep withValidity(boolean[] validity, EncodeContext ctx) {
-        if (!applicable) {
+        if (!applicable || BitmapCompressor.isAllValid(validity)) {
             return this;
         }
         EncodeResult bool = BitmapCompressor.compress(validity, ctx);

@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.Random;
@@ -44,6 +46,23 @@ class BitmapCompressorTest {
         // Then
         assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_SPARSE);
         assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+    }
+
+    /// Rust drops an all-true bitmap once `constant(true)` is smaller: 3 bitmap bytes, from 17
+    /// rows. A nullable array the compressor saw with no null then has no validity child.
+    @ParameterizedTest(name = "{0} rows, one null: {1}")
+    @CsvSource({"16, false, false", "17, false, true", "4000, false, true", "4000, true, false"})
+    void anAllValidBitmapIsDroppedOnceAConstantIsSmaller(int rows, boolean oneNull, boolean expected) {
+        // Given
+        boolean[] validity = new boolean[rows];
+        Arrays.fill(validity, true);
+        validity[rows - 1] = !oneNull;
+
+        // When
+        boolean result = BitmapCompressor.isAllValid(validity);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     @Test

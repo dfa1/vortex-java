@@ -1,8 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -87,9 +88,27 @@ public record EncodeResult(
     ///
     /// @param validity per-row validity
     /// @param ctx      the encode context
-    /// @return a copy of this result with the validity child and its buffers
+    /// @return a copy of this result with the validity child and its buffers, or this result when
+    ///         Rust drops an all-valid bitmap ([BitmapCompressor#isAllValid(boolean[])])
     EncodeResult withValidity(boolean[] validity, EncodeContext ctx) {
-        EncodeResult bool = BitmapCompressor.compress(validity, ctx);
+        if (BitmapCompressor.isAllValid(validity)) {
+            return this;
+        }
+        return withValidityChild(BitmapCompressor.compress(validity, ctx), validity);
+    }
+
+    /// This result with `validity` appended as a plain `vortex.bool`, as Rust stores an array a
+    /// scheme keeps as `Sparse::encode` built it, never through the compressor: the float sparse
+    /// scheme's patch values, whose all-valid bitmap the compressor would otherwise drop.
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return a copy of this result with the bitmap child and its buffer
+    EncodeResult withPlainValidity(boolean[] validity, EncodeContext ctx) {
+        return withValidityChild(new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx), validity);
+    }
+
+    private EncodeResult withValidityChild(EncodeResult bool, boolean[] validity) {
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
         children[children.length - 1] = validityNode(
                 EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size()), validity);

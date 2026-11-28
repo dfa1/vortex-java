@@ -176,8 +176,14 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             boolean[] allValid = new boolean[idx.length];
             Arrays.fill(allValid, true);
             ProtoScalarValue nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
-            return cascadeStep(dtype, nullFill, idx, idxPtype, new NullableData(data.validValues(), allValid),
-                    stats, ctx);
+            Object patchValues = new NullableData(data.validValues(), allValid);
+            if (ptype.isFloating()) {
+                // Rust's float sparse scheme stores the values as Sparse::encode leaves them, so the
+                // compressor never drops their all-valid bitmap as it drops an integer's
+                patchValues = new PrimitiveEncodingEncoder().encode(dtype, data.validValues(), ctx)
+                        .withPlainValidity(allValid, ctx);
+            }
+            return cascadeStep(dtype, nullFill, idx, idxPtype, patchValues, stats, ctx);
         }
         Object values = data.values();
         long fill = fillBits(ptype, data.validValues());

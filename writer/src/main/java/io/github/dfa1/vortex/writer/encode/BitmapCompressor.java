@@ -40,8 +40,8 @@ final class BitmapCompressor {
     static EncodeResult compress(boolean[] validity, EncodeContext ctx) {
         EncodeResult bitmap = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         int n = validity.length;
-        // ponytail: one value throughout stays a bitmap; Rust makes it a constant, which no
-        // validity reaching here has been (no nulls has no bitmap, all nulls is a null constant)
+        // ponytail: all false stays a bitmap; Rust makes it a constant, which no validity reaching
+        // here has been (all nulls is a null constant). All true is [#isAllValid(boolean[])].
         if (n == 0 || SimdOperationsSupport.preferred().allEqual(validity)) {
             return bitmap;
         }
@@ -75,6 +75,18 @@ final class BitmapCompressor {
             return bitmap;
         }
         return compressed;
+    }
+
+    /// Whether Rust drops `validity` altogether: an all-true bitmap compresses to a
+    /// `constant(true)` once that is smaller (from 17 rows on, as [CascadingCompressor] keeps
+    /// bool arrays), and `child_to_validity` reads a true constant as all valid, which has no
+    /// child. The patch values of a sparse with a null fill are one such array: every row valid.
+    ///
+    /// @param validity per-row validity
+    /// @return `true` when the array gets no validity child
+    static boolean isAllValid(boolean[] validity) {
+        return (validity.length + 7) / 8 > CascadingCompressor.CONSTANT_BOOL_BYTES
+                && validity[0] && SimdOperationsSupport.preferred().allEqual(validity);
     }
 
     /// `BoolSparseScheme`: the majority value as the fill, the other rows' indices as the patches,
