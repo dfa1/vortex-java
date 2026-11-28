@@ -59,7 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Which text and numeric columns get Rust's dict layout, and how many dictionaries it makes (#650,
 /// #649). Rust's `DictStrategy` admits a column by its first 8192 rows and starts a new dictionary
-/// whenever the open one reaches 65,535 entries or 1 MiB, so a column of any total cardinality can
+/// whenever the open one reaches 65,535 entries or 2 MiB, so a column of any total cardinality can
 /// keep its dict layout.
 @Tag("slow")
 class DictLayoutInteropIntegrationTest {
@@ -97,13 +97,14 @@ class DictLayoutInteropIntegrationTest {
     @Test
     void startsANewDictionaryWhenTheOpenOneIsFull(@TempDir Path tmp) throws Exception {
         // Given — 8 chunks, each drawing 3000 values from a window that slides 2500 values on: well under
-        // half distinct in the first 8192 rows, but 23000 values of 96 bytes overall, past 1 MiB
+        // half distinct in the first 8192 rows, but 23000 values of about 110 bytes (and a 16-byte
+        // view each) overall: 2.9 MB, past the 2 MiB Rust 0.95 gives a dictionary
         Random r = new Random(5);
         int chunks = 8;
         String[] pool = new String[2500 * chunks + 3000];
         for (int i = 0; i < pool.length; i++) {
-            pool[i] = "https://example.org/some/long/path/segment/" + Long.toString(r.nextLong() & 0xffffffffffL, 36)
-                    + "/index.html?utm=" + i;
+            pool[i] = "https://example.org/some/long/path/segment/with/a/few/more/directories/"
+                    + Long.toString(r.nextLong() & 0xffffffffffL, 36) + "/index.html?utm=" + i;
         }
         String[] values = new String[CHUNK * chunks];
         for (int i = 0; i < values.length; i++) {

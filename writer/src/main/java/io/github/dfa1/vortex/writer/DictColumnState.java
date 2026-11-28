@@ -40,11 +40,11 @@ final class DictColumnState {
     /// estimate beat bit-packing where on Rust's U16 codes it does not (taxi Airport_fee).
     static final PType CODES_PTYPE = PType.U16;
 
-    /// Rust's `DictLayoutConstraints` defaults: at most `u16::MAX` entries and 1 MiB of values (of
-    /// views plus out-of-line bytes for text). A column that reaches either starts a new dictionary,
-    /// so a column's cardinality is not a reason to give up the dict layout.
+    /// Rust's `DictLayoutConstraints` defaults: at most `u16::MAX` entries and 2 MiB of values (of
+    /// views plus out-of-line bytes for text; 1 MiB before Rust 0.95). A column that reaches either
+    /// starts a new dictionary, so a column's cardinality is not a reason to give up the dict layout.
     static final int MAX_ENTRIES = 65_535;
-    static final long MAX_DICT_BYTES = 1L << 20;
+    static final long MAX_DICT_BYTES = 2L << 20;
     private static final int VIEW_BYTES = 16;
     private static final int MAX_INLINED_BYTES = 12;
 
@@ -191,7 +191,7 @@ final class DictColumnState {
     }
 
     /// Ingests the leading rows of a primitive chunk that fit this dictionary under Rust's constraints
-    /// (`DictLayoutConstraints`: [#MAX_ENTRIES] entries and 1 MiB of values), as Rust's primitive dict
+    /// (`DictLayoutConstraints`: [#MAX_ENTRIES] entries and [#MAX_DICT_BYTES] of values), as Rust's primitive dict
     /// builder does: the first entry is always admitted, and the row that needs an entry that no
     /// longer fits ends the prefix. The caller starts a new dictionary with the rest. Dedups each
     /// valid value into the shared value-to-code map, appends a per-chunk `short[]` code array, and

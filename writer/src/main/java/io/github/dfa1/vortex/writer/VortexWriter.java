@@ -45,7 +45,7 @@ import java.util.function.Consumer;
 ///
 /// With global dictionary encoding enabled (the default), candidate columns are buffered in the heap
 /// until `close()` so a shared dictionary can span every chunk. Buffering is bounded (ADR 0021): each
-/// candidate retains a deduplicated value-to-code map of at most 65,535 entries or 1 MiB per
+/// candidate retains a deduplicated value-to-code map of at most 65,535 entries or 2 MiB per
 /// dictionary, as Rust's dict layout does, plus cheap per-chunk code arrays; a column that fills a
 /// dictionary starts the next, so retained memory scales with the open dictionary and the row count,
 /// not the raw byte size. [WriteOptions#globalDictMaxRetainedBytes()] (default 1 GB) remains a
