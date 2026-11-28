@@ -29,19 +29,20 @@ final class DictValueOrder {
     /// @param raw       each distinct value's raw bits, by first-seen code (sign-extended for
     ///                  integers narrower than 64 bits)
     /// @param dictSize  the number of distinct values
-    /// @param len       the array's length, nulls included
-    /// @param fullGrows whether a valid row came after the last new value: Rust's float set
-    ///                  reserves on every insert, so a duplicate on a full table grows it
+    /// @param codes     each row's first-seen code, its length the array's, nulls included; a
+    ///                  float set grows as its rows arrive, so it replays them
+    /// @param validity  which rows are valid, or `null` when all are
     /// @return `rank[firstSeenCode]` = Rust's code
-    static int[] ranks(PType ptype, long[] raw, int dictSize, int len, boolean fullGrows) {
-        return ranks(ptype, raw, dictSize, len, fullGrows, GROUP_WIDTH);
+    static int[] ranks(PType ptype, long[] raw, int dictSize, int[] codes, boolean[] validity) {
+        return ranks(ptype, raw, dictSize, codes, validity, GROUP_WIDTH);
     }
 
-    /// [#ranks(PType, long[], int, int, boolean)] for a given `hashbrown` group width.
-    static int[] ranks(PType ptype, long[] raw, int dictSize, int len, boolean fullGrows, int groupWidth) {
+    /// [#ranks(PType, long[], int, int[], boolean[])] for a given `hashbrown` group width.
+    static int[] ranks(PType ptype, long[] raw, int dictSize, int[] codes, boolean[] validity, int groupWidth) {
         if (dictSize == 0) {
             return new int[0];
         }
+        int len = codes.length;
         long widthMask = ptype.bits() == 64 ? -1L : (1L << ptype.bits()) - 1;
         long[] hashes = new long[dictSize];
         for (int c = 0; c < dictSize; c++) {
@@ -49,13 +50,28 @@ final class DictValueOrder {
         }
         Table table;
         if (ptype.isFloating()) {
-            // HashSet<NativeValue<T>>: one entry is the float itself
+            // HashSet<NativeValue<T>>: one entry is the float itself. Rust 0.95 extends it with
+            // each 64-row chunk's valid values (stats/float.rs, for_each_chunk), and hashbrown's
+            // extend reserves the chunk's count, half of it once the set has items, before
+            // inserting; every insert then reserves one more, a duplicate's too
             table = new Table(hashes, len / 2, ptype.byteSize(), groupWidth);
-            for (int c = 0; c < dictSize; c++) {
-                table.insert(c);
-            }
-            if (fullGrows && table.growthLeft == 0) {
-                table.grow();
+            for (int start = 0; start < len; start += 64) {
+                int end = Math.min(len, start + 64);
+                int valid = 0;
+                for (int i = start; i < end; i++) {
+                    if (validity == null || validity[i]) {
+                        valid++;
+                    }
+                }
+                if (valid == 0) {
+                    continue;
+                }
+                table.reserve(table.items == 0 ? valid : (valid + 1) / 2);
+                for (int i = start; i < end; i++) {
+                    if (validity == null || validity[i]) {
+                        table.insertRow(codes[i]);
+                    }
+                }
             }
             return table.ranks();
         }
@@ -155,11 +171,33 @@ final class DictValueOrder {
             growthLeft--;
         }
 
+        /// `HashMap::insert` of a row's value: reserve one, growing a full table even for a
+        /// value it holds, then place it when it is new. First-seen codes arrive in order, so
+        /// a new value's code is the item count.
+        void insertRow(int code) {
+            if (code == items) {
+                insert(code);
+            } else if (growthLeft == 0) {
+                grow();
+            }
+        }
+
+        /// `reserve`: grow when `additional` items would not fit.
+        void reserve(long additional) {
+            if (additional > growthLeft) {
+                resize(items + additional);
+            }
+        }
+
+        private void grow() {
+            resize(items + 1L);
+        }
+
         /// `reserve_rehash` without deletes: resize to the next capacity, re-inserting in
         /// iteration order.
-        void grow() {
+        private void resize(long newItems) {
             int[] order = iterationOrder();
-            buckets = capacityToBuckets(Math.max(items + 1L, capacityOf(buckets - 1) + 1));
+            buckets = capacityToBuckets(Math.max(newItems, capacityOf(buckets - 1) + 1));
             full = new long[(int) ((buckets + 63) >>> 6)];
             for (int code : order) {
                 place(code);
