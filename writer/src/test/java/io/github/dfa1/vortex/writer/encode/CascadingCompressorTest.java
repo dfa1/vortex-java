@@ -974,4 +974,39 @@ class CascadingCompressorTest {
             return ids;
         }
     }
+
+    /// Rust 0.95's `sample_rows`: a sample of 8 FastLanes chunks or more takes them whole and
+    /// aligned, one from each partition of the full chunks. The expected starts are what Rust's
+    /// `sample_aligned_chunks` picks for these lengths (printed by a vortex-compressor 0.95 harness),
+    /// so the draw is Rust's bit for bit.
+    @ParameterizedTest(name = "{0} rows, {1} chunks")
+    @CsvSource(delimiter = ';', value = {
+            "1048576; 11; 47104 111616 262144 305152 443392 536576 587776 760832 801792 893952 955392",
+            "800000; 8; 49152 116736 275456 320512 466944 564224 616448 797696",
+            "2000000; 16; 61440 146432 344064 399360 581632 703488 770048 997376 1051648 1172480 1253376 "
+                    + "1491968 1532928 1711104 1873920 1917952"})
+    void compressionSlices_longArrays_takeRustsAlignedChunks(int n, int chunks, String starts) {
+        // When
+        List<int[]> result = CascadingCompressor.compressionSlices(n, chunks * 1024, SampleRng.RUST_SAMPLE_SEED);
+
+        // Then
+        assertThat(result.stream().mapToInt(slice -> slice[0]).toArray())
+                .containsExactly(java.util.Arrays.stream(starts.split(" ")).mapToInt(Integer::parseInt).toArray());
+        assertThat(result).allSatisfy(slice -> assertThat(slice[1] - slice[0]).isEqualTo(1024));
+    }
+
+    @ParameterizedTest(name = "{0} rows, sample {1}")
+    @CsvSource({
+            // 7 chunks: under Rust's MIN_SAMPLE_CHUNKS
+            "1048576, 7168",
+            // 8 chunks over only 8 full ones: Rust's sample_aligned_chunks declines
+            "9000, 8192"})
+    void compressionSlices_otherwise_takeStrides(int n, int sampleSize) {
+        // When
+        List<int[]> result = CascadingCompressor.compressionSlices(n, sampleSize, SampleRng.RUST_SAMPLE_SEED);
+
+        // Then
+        assertThat(result).hasSize(sampleSize / 64);
+        assertThat(result).allSatisfy(slice -> assertThat(slice[1] - slice[0]).isEqualTo(64));
+    }
 }

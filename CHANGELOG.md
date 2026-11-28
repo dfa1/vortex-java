@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Chunk.prefetch` and `VortexHandle.prefetch` start the range requests of several columns together over HTTP, merged into few requests, and an HTTP handle keeps the segments it has read. ([#744](https://github.com/dfa1/vortex-java/issues/744))
 
 ### Fixed
+- A chunk of 723,200 rows or more is sampled as whole, aligned 1024-row chunks, as Rust 0.95 samples it, so its encodings are the ones Rust picks. ([#774](https://github.com/dfa1/vortex-java/pull/774))
 - A decimal chunk is dictionary-encoded when Rust 0.95's estimate prefers a dictionary to byte parts, as Rust writes it. ([#773](https://github.com/dfa1/vortex-java/pull/773))
 - A Rust-written `vortex.dict` over decimals, as Rust 0.95 writes a zone table's decimal bounds, now reads instead of failing. ([#773](https://github.com/dfa1/vortex-java/pull/773))
 - A text column more than 90% null is written as `vortex.sparse` when Rust 0.95 would write it so, keeping only its valid rows. ([#772](https://github.com/dfa1/vortex-java/pull/772))
