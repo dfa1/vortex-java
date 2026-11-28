@@ -74,7 +74,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
     }
 
     private static EncodeResult encode(DType dtype, Object data, VarBinBytes.Rows rows, EncodeContext ctx) {
-        OnPair c = Encoder.compress(rows);
+        OnPair c = Encoder.compress(rows, Encoder.trainingFraction(ctx));
         Arena arena = ctx.arena();
         PType[] ptypes = c.childPTypes();
         List<EncodedBuffer> buffers = new ArrayList<>();
@@ -112,7 +112,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         if (ctx.allowedCascading() == 0) {
             return CascadeStep.terminal(encode(dtype, data, rows, ctx));
         }
-        OnPair c = Encoder.compress(rows);
+        OnPair c = Encoder.compress(rows, Encoder.trainingFraction(ctx));
         PType[] ptypes = c.childPTypes();
         List<ChildSlot> slots = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
@@ -195,12 +195,22 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         /// `onpair::DEFAULT_CONFIG`: 2^12 tokens, 15% byte sample, seed 42.
         static final int DICT_CAPACITY = 1 << 12;
         static final double SAMPLE_FRACTION = 0.15;
+        /// Rust 0.95's `SAMPLE_TRAINING_FRACTION`: on a compression sample of about a thousand
+        /// rows, 15% leaves too few to train a dictionary that ranks OnPair fairly against FSST,
+        /// so a sample trains on half its bytes.
+        static final double SAMPLE_TRAINING_FRACTION = 0.5;
         static final long SEED = 42;
         /// Codes held per off-heap chunk: 4 MiB of `int`s.
         static final int CHUNK_CODES = 1 << 20;
 
-        static OnPair compress(VarBinBytes.Rows rows) {
-            Trie trained = train(rows);
+        /// The share of the bytes the trainer scans: half on a compression sample, as Rust's
+        /// scheme sets `config.threshold` when `compress_ctx.is_sample()`.
+        static double trainingFraction(EncodeContext ctx) {
+            return ctx.sample() ? SAMPLE_TRAINING_FRACTION : SAMPLE_FRACTION;
+        }
+
+        static OnPair compress(VarBinBytes.Rows rows, double fraction) {
+            Trie trained = train(rows, fraction);
             byte[][] tokens = trained.sortedTokens();
             Trie dict = new Trie();
             long[] dictOffsets = new long[tokens.length + 1];
@@ -260,7 +270,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
         /// `discover_tokens` over a seeded random row order, until the byte budget or the
         /// dictionary capacity runs out.
-        static Trie train(VarBinBytes.Rows rows) {
+        static Trie train(VarBinBytes.Rows rows, double fraction) {
             Trie trie = new Trie();
             byte[] single = new byte[1];
             for (int b = 0; b < 256; b++) {
@@ -282,7 +292,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 order[j] = tmp;
             }
             long totalBytes = (long) offsets[n] - offsets[0];
-            Threshold threshold = new Threshold((long) DICT_CAPACITY - 256, totalBytes);
+            Threshold threshold = new Threshold((long) DICT_CAPACITY - 256, totalBytes, fraction);
             LongIntMap pairs = new LongIntMap(1024);
             for (int r : order) {
                 int start = offsets[r];
@@ -337,9 +347,9 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         long scannedAtCheck;
         long nextCheck;
 
-        Threshold(long capacity, long totalBytes) {
+        Threshold(long capacity, long totalBytes, double fraction) {
             this.capacity = capacity;
-            this.budget = (long) (totalBytes * Encoder.SAMPLE_FRACTION);
+            this.budget = (long) (totalBytes * fraction);
             this.checkInterval = Math.max(capacity / 128, 64);
             this.nextCheck = checkInterval;
         }
