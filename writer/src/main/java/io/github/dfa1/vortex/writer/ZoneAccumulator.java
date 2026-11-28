@@ -140,9 +140,10 @@ final class ZoneAccumulator {
     }
 
     /// `vortex.zoned` layout metadata: version byte `1`, then the protobuf
-    /// `ZonedMetadataProto { uint32 zone_len = 1; repeated AggregateSpecProto aggregate_specs = 2; }`
-    /// with `AggregateSpecProto { string id = 1; bytes options = 2; }` — byte-for-byte what
-    /// vortex-jni writes.
+    /// `ZonedMetadataProto { uint32 zone_len = 1; repeated AggregateFn aggregate_specs = 2; }`
+    /// with `vortex.expr.AggregateFn { string id = 1; optional bytes metadata = 2; }` — byte-for-byte
+    /// what vortex-jni writes. Rust 0.95's `serialize_proto` always sets the options, so an aggregate
+    /// without any (`vortex.null_count`, `vortex.nan_count`) still carries the empty field `12 00`.
     byte[] metadata() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(1);
@@ -155,11 +156,9 @@ final class ZoneAccumulator {
             spec.write(0x0a);
             writeVarint(spec, idBytes.length);
             spec.writeBytes(idBytes);
-            if (options.length > 0) {
-                spec.write(0x12);
-                writeVarint(spec, options.length);
-                spec.writeBytes(options);
-            }
+            spec.write(0x12);
+            writeVarint(spec, options.length);
+            spec.writeBytes(options);
             out.write(0x12);
             writeVarint(out, spec.size());
             out.writeBytes(spec.toByteArray());

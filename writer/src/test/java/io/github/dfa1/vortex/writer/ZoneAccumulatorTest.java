@@ -109,9 +109,10 @@ class ZoneAccumulatorTest {
 
         @Test
         void floatMetadataIsByteIdenticalToVortexJni() {
-            // Given the zoned metadata vortex-jni 0.86.1 writes for an F64 column
+            // Given the zoned metadata vortex-jni 0.95 writes for an F64 column: nan_count and
+            // null_count have no options, and still end in the empty options field 12 00
             String jni = "0108804012100a0a766f727465782e6d61781202080112100a0a766f727465782e6d696e1202080112"
-                    + "120a10766f727465782e6e616e5f636f756e7412130a11766f727465782e6e756c6c5f636f756e74";
+                    + "140a10766f727465782e6e616e5f636f756e74120012150a11766f727465782e6e756c6c5f636f756e741200";
 
             // When
             byte[] result = new ZoneAccumulator(DTypes.F64).metadata();
@@ -122,10 +123,10 @@ class ZoneAccumulatorTest {
 
         @Test
         void utf8MetadataIsByteIdenticalToVortexJni() {
-            // Given the zoned metadata vortex-jni 0.86.1 writes for a Utf8 column
+            // Given the zoned metadata vortex-jni 0.95 writes for a Utf8 column
             String jni = "01088040121e0a12766f727465782e626f756e6465645f6d617812084000000000000000121e0a12766f"
-                    + "727465782e626f756e6465645f6d696e1208400000000000000012130a11766f727465782e6e756c6c"
-                    + "5f636f756e74";
+                    + "727465782e626f756e6465645f6d696e1208400000000000000012150a11766f727465782e6e756c6c"
+                    + "5f636f756e741200";
 
             // When
             byte[] result = new ZoneAccumulator(DTypes.UTF8).metadata();
