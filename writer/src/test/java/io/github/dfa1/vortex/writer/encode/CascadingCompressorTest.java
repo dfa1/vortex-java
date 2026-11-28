@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import io.github.dfa1.vortex.writer.WriteRegistry;
@@ -52,6 +53,25 @@ class CascadingCompressorTest {
 
     private static EncodeContext ctx(int depth) {
         return EncodeContext.ofDepth(depth, Arena.ofAuto(), toRegistry(ALL_CODECS));
+    }
+
+    /// Rust 0.95's `amortize_fixed_nbytes`: a sample pays its fixed bytes at its share of the
+    /// array's rows, rounded up; a sample that is the whole array pays them in full, and the
+    /// fixed bytes never exceed the total.
+    @ParameterizedTest(name = "total {0}, fixed {1}, {2} of {3} rows -> {4}")
+    @CsvSource({
+            "1000, 400, 1024, 5000, 682",
+            "1000, 400, 1, 3, 734",
+            "1000, 400, 5000, 5000, 1000",
+            "100, 400, 1024, 5000, 21",
+            "1000, 0, 1024, 5000, 1000"})
+    void amortized_chargesTheSampleItsShareOfTheFixedBytes(long total, long fixed, int sampleLen, int fullLen,
+                                                            long expected) {
+        // When
+        long result = CascadingCompressor.amortized(total, fixed, sampleLen, fullLen);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     @Nested
