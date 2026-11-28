@@ -48,9 +48,7 @@ public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
         boolean nullable = ctx.dtype().nullable();
         DType mspDtype = new DType.Primitive(mspPtype, nullable);
         ArrayNode mspNode = ctx.node().children()[0];
-        DecodeContext mspCtx = new DecodeContext(
-                mspNode, mspDtype, ctx.rowCount(),
-                ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+        DecodeContext mspCtx = ctx.derive(mspNode, mspDtype, ctx.rowCount());
         Array mspArray = ctx.registry().decode(mspCtx);
         // A nullable column carries its validity on the mantissa child. Hoist it to the outside, like
         // every other nullable array, so consumers see null rows (MaskedArray) instead of calling

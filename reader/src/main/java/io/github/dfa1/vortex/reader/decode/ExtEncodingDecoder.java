@@ -24,9 +24,7 @@ public final class ExtEncodingDecoder implements EncodingDecoder {
         }
         long n = ctx.rowCount();
         ArrayNode childNode = ctx.node().children()[0];
-        DecodeContext childCtx = new DecodeContext(
-                childNode, ext.storageDType(), n,
-                ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+        DecodeContext childCtx = ctx.derive(childNode, ext.storageDType(), n);
         return ctx.registry().decode(childCtx);
     }
 }

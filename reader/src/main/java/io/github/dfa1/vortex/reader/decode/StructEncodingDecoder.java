@@ -41,8 +41,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             BoolArray structValidity = null;
             if (hasValidity) {
                 ArrayNode validityNode = ctx.node().children()[0];
-                var validityCtx = new DecodeContext(validityNode, DTypes.BOOL,
-                        ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                var validityCtx = ctx.derive(validityNode, DTypes.BOOL, ctx.rowCount());
                 Array va = ctx.registry().decode(validityCtx);
                 structValidity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "struct validity");
             }
@@ -52,8 +51,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             if (nfields == 1) {
                 DType fieldDtype = structDtype.fieldTypes().getFirst();
                 ArrayNode fieldNode = ctx.node().children()[fieldOffset];
-                var fieldCtx = new DecodeContext(fieldNode, fieldDtype,
-                        ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                var fieldCtx = ctx.derive(fieldNode, fieldDtype, ctx.rowCount());
                 Array field = ctx.registry().decode(fieldCtx);
                 return structValidity != null ? new MaskedArray(field, structValidity) : field;
             }
@@ -62,8 +60,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             for (int i = 0; i < nfields; i++) {
                 ArrayNode fieldNode = ctx.node().children()[fieldOffset + i];
                 DType fieldDtype = structDtype.fieldTypes().get(i);
-                var fieldCtx = new DecodeContext(fieldNode, fieldDtype,
-                        ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                var fieldCtx = ctx.derive(fieldNode, fieldDtype, ctx.rowCount());
                 Array field = ctx.registry().decode(fieldCtx);
                 fieldArrays.add(structValidity != null ? new MaskedArray(field, structValidity) : field);
             }
@@ -72,20 +69,15 @@ public final class StructEncodingDecoder implements EncodingDecoder {
 
         if (numChildren == 1) {
             ArrayNode valuesNode = ctx.node().children()[0];
-            var valuesCtx = new DecodeContext(
-                    valuesNode, ctx.dtype(), ctx.rowCount(),
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            var valuesCtx = ctx.derive(valuesNode, ctx.dtype(), ctx.rowCount());
             return ctx.registry().decode(valuesCtx);
         } else if (numChildren == 2) {
             ArrayNode validityNode = ctx.node().children()[0];
-            var validityCtx = new DecodeContext(validityNode, DTypes.BOOL,
-                    ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            var validityCtx = ctx.derive(validityNode, DTypes.BOOL, ctx.rowCount());
             Array va = ctx.registry().decode(validityCtx);
             BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "scalar wrapper validity");
             ArrayNode valuesNode = ctx.node().children()[1];
-            var valuesCtx = new DecodeContext(
-                    valuesNode, ctx.dtype().withNullable(false), ctx.rowCount(),
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            var valuesCtx = ctx.derive(valuesNode, ctx.dtype().withNullable(false), ctx.rowCount());
             Array values = ctx.registry().decode(valuesCtx);
             return new MaskedArray(values, validity);
         } else {

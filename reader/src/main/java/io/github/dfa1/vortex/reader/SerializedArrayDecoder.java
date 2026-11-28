@@ -65,19 +65,23 @@ final class SerializedArrayDecoder {
         // fits in it, and its tables nest at most 64 deep.
         var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
         MemorySegment[] bufs = new MemorySegment[fbArray.buffersLength()];
+        int[] alignments = new int[bufs.length];
         long dataOffset = 0;
         for (int i = 0; i < bufs.length; i++) {
             FbsBuffer bufDesc = fbArray.buffers(i);
             dataOffset += bufDesc.padding();
             bufs[i] = IoBounds.slice(seg, dataOffset, bufDesc.length());
             dataOffset += bufDesc.length();
+            // a u8 exponent on the wire; past 2^30 it only has to compare as "aligned enough"
+            alignments[i] = 1 << Math.min(bufDesc.alignmentExponent(), 30);
         }
         var root = fbArray.root();
         if (root == null) {
             throw new VortexException("array flatbuffer missing root");
         }
 
-        var ctx = new DecodeContext(convertArrayNode(root, encodingSpecs), dtype, rowCount, bufs, registry, arena);
+        var ctx = new DecodeContext(convertArrayNode(root, encodingSpecs), dtype, rowCount, bufs, registry, arena,
+                alignments);
         Array array = registry.decode(ctx);
         if (event.shouldCommit()) {
             event.encoding = ctx.node().encodingId().id();

@@ -71,12 +71,21 @@ public final class ZstdBuffersEncodingDecoder implements EncodingDecoder {
 
         int base = ctx.segmentBuffers().length;
         MemorySegment[] segments = Arrays.copyOf(ctx.segmentBuffers(), base + nBuffers);
+        // the decompressed buffers declare the alignments the metadata records
+        int[] alignments = null;
+        if (ctx.bufferAlignments() != null) {
+            alignments = Arrays.copyOf(ctx.bufferAlignments(), base + nBuffers);
+        }
         int[] innerBuffers = new int[nBuffers];
         try (ZstdDecompressContext dctx = Zstd.newDecompressContext();
              Arena scratch = Arena.ofConfined()) {
             for (int i = 0; i < nBuffers; i++) {
                 int size = IoBounds.toIntSize(meta.uncompressed_sizes().get(i));
-                MemorySegment dst = ctx.arena().allocate(size, alignment(meta.buffer_alignments().get(i)));
+                long alignment = alignment(meta.buffer_alignments().get(i));
+                if (alignments != null) {
+                    alignments[base + i] = (int) alignment;
+                }
+                MemorySegment dst = ctx.arena().allocate(size, alignment);
                 MemorySegment src = ZstdEncodingDecoder.asNative(ctx.buffer(i), scratch);
                 ZstdEncodingDecoder.decompressFrame(dctx, dst, src, null, EncodingId.VORTEX_ZSTD_BUFFERS, i);
                 segments[base + i] = dst;
@@ -89,7 +98,8 @@ public final class ZstdBuffersEncodingDecoder implements EncodingDecoder {
         byte[] innerMetadata = meta.inner_metadata() == null ? new byte[0] : meta.inner_metadata();
         ArrayNode inner = new ArrayNode(innerEncodingId(meta.inner_encoding_id()),
                 MemorySegment.ofArray(innerMetadata), ctx.node().children(), innerBuffers);
-        return new DecodeContext(inner, ctx.dtype(), ctx.rowCount(), segments, ctx.registry(), ctx.arena());
+        return new DecodeContext(inner, ctx.dtype(), ctx.rowCount(), segments, ctx.registry(), ctx.arena(),
+                alignments);
     }
 
     /// The wrapped encoding's id comes from the file's metadata, so an id [EncodingId#parse] refuses
