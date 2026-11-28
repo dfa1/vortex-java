@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.reflect.Array;
 
@@ -22,6 +23,8 @@ public final class ArrayAndStats {
     private final Object data;
     private final StatsOptions options;
     private ArrayStats stats;
+    private EncodingId trialScheme;
+    private EncodeResult trial;
 
     /// Bundles `data` with stats computed on demand under `options`.
     ///
@@ -32,6 +35,36 @@ public final class ArrayAndStats {
         this.dtype = dtype;
         this.data = data;
         this.options = options;
+        this.stats = null;
+        this.trialScheme = null;
+        this.trial = null;
+    }
+
+    /// Keeps the complete output a scheme produced while estimating (Rust's `TrialOutput`), the
+    /// first one only: the compressor reuses it when that scheme wins, and takes it over another
+    /// winner that comes out larger.
+    ///
+    /// @param scheme the scheme that produced it
+    /// @param output its complete output for this array
+    void keepTrial(EncodingId scheme, EncodeResult output) {
+        if (trial == null) {
+            trialScheme = scheme;
+            trial = output;
+        }
+    }
+
+    /// The kept trial output, or `null`.
+    ///
+    /// @return the output [#keepTrial] kept
+    EncodeResult trial() {
+        return trial;
+    }
+
+    /// The scheme of the kept trial output, or `null`.
+    ///
+    /// @return the scheme [#keepTrial] kept
+    EncodingId trialScheme() {
+        return trialScheme;
     }
 
     /// Returns the array the statistics describe.
