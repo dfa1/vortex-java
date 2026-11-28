@@ -383,9 +383,10 @@ class DictColumnStateTest {
 
     @Test
     void ingestVarBinChunk_countsViewsAndOutOfLineBytesAgainstTheByteLimit() {
-        // Given — 20-byte values cost a 16-byte view plus themselves: 36 bytes, so 29127 fit in 1 MiB
+        // Given — 20-byte values cost a 16-byte view plus themselves: 36 bytes, so 58254 fit in 2 MiB,
+        // below the 65,535-entry limit, so the bytes are what stops the dictionary
         DictColumnState sut = new DictColumnState(new DType.Utf8(false), true);
-        String[] values = new String[40_000];
+        String[] values = new String[65_000];
         for (int i = 0; i < values.length; i++) {
             values[i] = String.format("%020d", i);
         }

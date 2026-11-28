@@ -24,7 +24,7 @@ import java.util.Set;
 /// dictionary (several in a chunked layout).
 ///
 /// Buffering is cardinality-bounded (ADR 0021): rather than retain raw values, each candidate holds
-/// a deduplicated value->code map (at most 65,535 entries or 1 MiB per dictionary) plus cheap
+/// a deduplicated value->code map (at most 65,535 entries or 2 MiB per dictionary) plus cheap
 /// per-chunk code arrays. Past [WriteOptions#globalDictMaxRetainedBytes()] the largest columns
 /// demote, replaying their buffered chunks to the writer's per-chunk path. The dict layouts
 /// themselves are built by [LayoutTree] from [#written()].
