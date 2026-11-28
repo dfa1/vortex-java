@@ -90,7 +90,7 @@ final class BitmapCompressor {
             }
         }
         PType indexPType = PType.narrowestUnsigned(indices[indices.length - 1]);
-        EncodeResult indexResult = new CascadingCompressor(SparseEncodingEncoder.INDEX_CASCADE_CANDIDATES).encode(
+        EncodeResult indexResult = fullCompressor(ctx).encode(
                 new DType.Primitive(indexPType, false),
                 PrimitiveArrays.fromIntsArray(indices, indexPType, EncodingId.VORTEX_SPARSE), ctx);
         boolean[] patchValues = new boolean[indices.length];
@@ -125,7 +125,7 @@ final class BitmapCompressor {
         values[r] = validity[n - 1];
         ends[r] = n;
         PType endsPType = PType.narrowestUnsigned(n);
-        EncodeResult endsResult = new CascadingCompressor(SparseEncodingEncoder.INDEX_CASCADE_CANDIDATES).encode(
+        EncodeResult endsResult = fullCompressor(ctx).encode(
                 new DType.Primitive(endsPType, false),
                 PrimitiveArrays.fromIntsArray(ends, endsPType, EncodingId.VORTEX_RUNEND), ctx);
         EncodeResult valuesResult = new BoolEncodingEncoder().encode(DTypes.BOOL, values, ctx);
@@ -137,6 +137,12 @@ final class BitmapCompressor {
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metadata),
                 new EncodeNode[]{endsResult.rootNode(), valuesNode}, new int[0]);
         return new EncodeResult(root, List.copyOf(buffers), null, null);
+    }
+
+    /// Rust's `compress_child`: the indices and ends go through the full compressor, whose
+    /// constant check keeps a one-value array primitive instead of a 0-bit pack.
+    private static CascadingCompressor fullCompressor(EncodeContext ctx) {
+        return new CascadingCompressor(List.copyOf(ctx.registry().encoderMap().values()));
     }
 
     private static long bufferBytes(EncodeResult result) {

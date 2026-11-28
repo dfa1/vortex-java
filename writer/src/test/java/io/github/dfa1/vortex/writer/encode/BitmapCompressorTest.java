@@ -30,6 +30,23 @@ class BitmapCompressorTest {
     }
 
     @Test
+    void aLoneExceptionAtRowZeroKeepsAPrimitiveIndex() {
+        // Given — one null, at row 0, as a dict values pool's null entry sits: the one index is 0,
+        // which a 0-bit pack stores in no bytes, but Rust's compressor finds the one-value array
+        // constant first, and a constant is not smaller, so it stays primitive
+        boolean[] validity = new boolean[100];
+        Arrays.fill(validity, true);
+        validity[0] = false;
+
+        // When
+        EncodeResult result = BitmapCompressor.compress(validity, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_SPARSE);
+        assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+    }
+
+    @Test
     void longRunsAreRunEnd() {
         // Given — 4 runs of 1000: 33 bytes of runs against 2002 of exceptions and a 500-byte bitmap
         boolean[] validity = new boolean[4000];
