@@ -196,7 +196,8 @@ class AlpRdEncodingEncoderTest {
         // Given: eight common exponents fill the dictionary; three outliers share one exponent
         // that is not in it, so their left parts are equal exceptions. Rust's compress_patches keeps
         // the indices as a plain primitive of the smallest unsigned type (u16 here: positions below
-        // 65536) and turns equal values into a constant array, with no bit-packing
+        // 65536) and turns equal values into a constant array, with no bit-packing. Rust 0.95
+        // (#11644) adds the chunk offsets: 2000 rows are two 1024-row chunks
         Random random = new Random(11);
         double[] values = new double[2_000];
         for (int i = 0; i < values.length; i++) {
@@ -214,11 +215,14 @@ class AlpRdEncodingEncoderTest {
 
         // Then
         EncodeNode[] children = result.rootNode().children();
-        assertThat(children).hasSize(4);
+        assertThat(children).hasSize(5);
         assertThat(children[2].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
         assertThat(children[3].encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+        assertThat(children[4].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
         assertThat(meta.patches().len()).isEqualTo(3);
         assertThat(meta.patches().indices_ptype()).isEqualTo(ProtoPType.fromValue(PType.U16.ordinal()));
+        assertThat(meta.patches().chunk_offsets_len()).isEqualTo(2L);
+        assertThat(meta.patches().chunk_offsets_ptype()).isEqualTo(ProtoPType.fromValue(PType.U8.ordinal()));
     }
 
     @Test
@@ -238,7 +242,7 @@ class AlpRdEncodingEncoderTest {
 
         // Then
         EncodeNode[] children = result.rootNode().children();
-        assertThat(children).hasSize(4);
+        assertThat(children).hasSize(5);
         assertThat(children[3].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
     }
 
