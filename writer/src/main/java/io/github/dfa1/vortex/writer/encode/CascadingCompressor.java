@@ -37,7 +37,7 @@ public final class CascadingCompressor {
     private static final EncodingEncoder CANONICAL_VARBINVIEW = new VarBinViewEncodingEncoder();
     private static final EncodingEncoder CANONICAL_BOOL = new BoolEncodingEncoder();
     /// Bytes of a `vortex.constant` bool: Rust keeps a bool array whose packed bits are no larger.
-    private static final int CONSTANT_BOOL_BYTES = 2;
+    static final int CONSTANT_BOOL_BYTES = 2;
     private static final EncodingEncoder CANONICAL_VARBIN = new VarBinEncodingEncoder();
     private static final EncodingEncoder CANONICAL_DECIMAL = new DecimalEncodingEncoder();
     private static final EncodingEncoder CANONICAL_EXTENSION = new ExtEncodingEncoder();
