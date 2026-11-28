@@ -36,6 +36,15 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
+    /// The canonical array is no scheme in Rust's competition, only what a leaf stays when no
+    /// scheme beats it (`Selection::Unchanged`). Measured, a nullable array's values and
+    /// compressed validity undercut the plain-bitmap baseline every scheme is held to, and won
+    /// where Rust bit-packs.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        return Estimate.SKIP;
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (data instanceof NullableData nullable) {

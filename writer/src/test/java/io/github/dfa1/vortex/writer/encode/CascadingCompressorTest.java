@@ -75,6 +75,28 @@ class CascadingCompressorTest {
             assertThat(result.buffers()).isNotEmpty();
         }
 
+        /// 287 distinct nullable i32 below 512, one null: 1148 bytes plain, 1152 bit-packed at 9
+        /// bits in one padded block. Rust holds every scheme to the canonical array with a plain
+        /// bitmap (1184 bytes) and never measures the canonical array itself, so bit-packing wins;
+        /// measured as a candidate, the plain values with their validity compressed undercut it.
+        @Test
+        void nullableArray_canonicalIsNoCandidate_bitPackingBeatsItsPlainBitmap() {
+            // Given
+            int[] values = new int[287];
+            boolean[] validity = new boolean[values.length];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = i + 1;
+                validity[i] = i != 0;
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I32.withNullable(true), new NullableData(values, validity), ctx(3));
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.FASTLANES_BITPACKED);
+        }
+
         @Test
         void depth1_alpPlusBitpacked_producesSmallResult_forF64() {
             // Given
