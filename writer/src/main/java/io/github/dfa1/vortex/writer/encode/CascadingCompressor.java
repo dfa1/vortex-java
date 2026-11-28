@@ -134,6 +134,12 @@ public final class CascadingCompressor {
                         System.arraycopy(a, srcOff, out, dstOff, len));
                 yield out;
             }
+            case BigDecimal[] a -> {
+                BigDecimal[] out = new BigDecimal[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
             case byte[][] a -> {
                 byte[][] out = new byte[sampleSize][];
                 forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
@@ -540,21 +546,70 @@ public final class CascadingCompressor {
     /// strictly smaller than the plain `vortex.decimal` (its values, plus a packed bitmap when some
     /// row is null). On a few rows, as in a zone-stats table, the parts cost as much as the plain
     /// values and the decimal stays canonical (#646).
+    ///
+    /// Rust 0.95 has byte parts compete with its `DecimalDictScheme` as the default
+    /// (`EstimateVerdict::AlwaysUse` in `choose_best_scheme`): once the dictionary has an estimate,
+    /// byte parts are measured on the sample after it and win only with a strictly better ratio.
+    /// Without a dictionary estimate they win unmeasured.
     private EncodeResult encodeDecimal(DType.Decimal dtype, Object data, EncodeContext ctx) {
-        EncodeResult scheme = spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
-        EncodingId root = scheme.rootNode().encodingId();
-        if (!root.equals(EncodingId.VORTEX_DECIMAL_BYTE_PARTS)) {
+        EncodingEncoder dict = dictionaryFor(dtype, ctx);
+        if (dict != null && DictEncodingEncoder.decimalRatio(dtype, data) instanceof Estimate.Ratio(double ratio)
+                && !(bytePartsSampleRatio(dtype, data, ctx) > ratio)) {
+            EncodeResult result = spliceResult(dict, dtype, data, ctx);
+            if (totalBytes(result) < plainDecimalBytes(dtype, data)) {
+                return result;
+            }
+            return CANONICAL_DECIMAL.encode(dtype, data, ctx);
+        }
+        EncodeResult scheme = encodeDecimalScheme(dtype, data, ctx);
+        if (!scheme.rootNode().encodingId().equals(EncodingId.VORTEX_DECIMAL_BYTE_PARTS)) {
             return scheme;
         }
+        if (totalBytes(scheme) < plainDecimalBytes(dtype, data)) {
+            return scheme;
+        }
+        return CANONICAL_DECIMAL.encode(dtype, data, ctx);
+    }
+
+    private EncodeResult encodeDecimalScheme(DType.Decimal dtype, Object data, EncodeContext ctx) {
+        return spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
+    }
+
+    /// The dictionary a decimal chunk may compete with: none past the cascade or where barred.
+    private EncodingEncoder dictionaryFor(DType.Decimal dtype, EncodeContext ctx) {
+        if (ctx.finishedCascading() || ctx.excluded().contains(EncodingId.VORTEX_DICT)) {
+            return null;
+        }
+        for (EncodingEncoder enc : encodings) {
+            if (enc.encodingId().equals(EncodingId.VORTEX_DICT)) {
+                return enc;
+            }
+        }
+        return null;
+    }
+
+    /// Byte parts' ratio on the array's sample, as Rust estimates a sampled scheme: the sample's
+    /// exact uncompressed size over its encoding's bytes. A sample of only nulls compresses to
+    /// nothing, which beats any ratio.
+    private double bytePartsSampleRatio(DType.Decimal dtype, Object data, EncodeContext ctx) {
+        int n = RowCount.of(data);
+        int sampleSize = sampleSize(n, ctx);
+        Object sample = sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
+        if (sample instanceof NullableData nullable && nullable.nullCount() == nullable.length()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        long after = totalBytes(encodeDecimalScheme(dtype, sample, ctx.withSampling()));
+        return after == 0 ? Double.POSITIVE_INFINITY : (double) plainDecimalBytes(dtype, sample) / after;
+    }
+
+    /// The plain `vortex.decimal`: its values, plus a packed bitmap when some row is null.
+    private static long plainDecimalBytes(DType.Decimal dtype, Object data) {
         int n = RowCount.of(data);
         long plain = (long) n * dtype.byteWidth();
         if (data instanceof NullableData nullable && nullable.nullCount() > 0) {
             plain += (n + 7) / 8;
         }
-        if (totalBytes(scheme) < plain) {
-            return scheme;
-        }
-        return CANONICAL_DECIMAL.encode(dtype, data, ctx);
+        return plain;
     }
 
     /// Rust's `compress_canonical` for an extension array (`compressor/cascade.rs`): an extension

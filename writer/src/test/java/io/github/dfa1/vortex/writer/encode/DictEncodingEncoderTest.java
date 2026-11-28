@@ -299,4 +299,74 @@ class DictEncodingEncoderTest {
         assertThat(result.openChildren().get(1).excluded())
             .containsExactly(EncodingId.VORTEX_DICT);
     }
+
+    /// Rust 0.95's `DecimalDictScheme` estimates with the integer dict cost model at the stored
+    /// width, skipping more than half the valid values distinct.
+    @org.junit.jupiter.api.Nested
+    class Decimal {
+
+        private static final DType.Decimal P10 = DType.Decimal.of(10, 2, false);
+
+        @Test
+        void ratio_halfOrFewerDistinct_isTheIntegerCostModelAtTheStoredWidth() {
+            // Given — 8 rows over 2 values in runs of 2: 4 runs
+            java.math.BigDecimal[] data = decimals(1, 1, 2, 2, 1, 1, 2, 2);
+
+            // When
+            Estimate result = DictEncodingEncoder.decimalRatio(P10, data);
+
+            // Then — p10 is stored as i64
+            assertThat(result).isEqualTo(Estimate.ratio(DictEncodingEncoder.integerDictRatio(64, 8, 2, 2)));
+        }
+
+        @Test
+        void ratio_moreThanHalfDistinct_skips() {
+            // When
+            Estimate result = DictEncodingEncoder.decimalRatio(P10, decimals(1, 2, 3, 3));
+
+            // Then
+            assertThat(result).isEqualTo(Estimate.SKIP);
+        }
+
+        @Test
+        void ratio_countsOnlyValidValues() {
+            // Given — 2 valid rows of one value; the 2 nulls hold distinct placeholders
+            NullableData data = new NullableData(decimals(5, 6, 5, 7), new boolean[]{true, false, true, false});
+
+            // When
+            Estimate result = DictEncodingEncoder.decimalRatio(P10, data);
+
+            // Then
+            assertThat(result).isEqualTo(Estimate.ratio(DictEncodingEncoder.integerDictRatio(64, 2, 1, 2)));
+        }
+
+        @Test
+        void encodeCascade_firstSeenValuesWithANullEntryAndNonNullCodes() {
+            // Given — rows 7, null, 3, 7, null: `dict_encode` adds the null entry at the first null
+            NullableData data = new NullableData(decimals(7, 0, 3, 7, 0),
+                    new boolean[]{true, false, true, true, false});
+
+            // When
+            CascadeStep result = new DictEncodingEncoder().encodeCascade(DType.Decimal.of(10, 2, true), data,
+                    EncodeTestHelper.cascadingCtx());
+
+            // Then
+            ChildSlot codes = result.openChildren().get(0);
+            assertThat(codes.childDtype()).isEqualTo(new DType.Primitive(PType.U8, false));
+            assertThat((byte[]) codes.childData()).containsExactly(0, 1, 2, 0, 1);
+            ChildSlot values = result.openChildren().get(1);
+            NullableData entries = (NullableData) values.childData();
+            assertThat(entries.validity()).containsExactly(true, false, true);
+            assertThat(((java.math.BigDecimal[]) entries.values())[2]).isEqualByComparingTo("0.03");
+            assertThat(values.excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_RUNEND, EncodingId.FASTLANES_RLE);
+        }
+
+        private static java.math.BigDecimal[] decimals(long... unscaled) {
+            java.math.BigDecimal[] out = new java.math.BigDecimal[unscaled.length];
+            for (int i = 0; i < unscaled.length; i++) {
+                out[i] = java.math.BigDecimal.valueOf(unscaled[i], 2);
+            }
+            return out;
+        }
+    }
 }

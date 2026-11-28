@@ -17,13 +17,20 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /// Write-only encoder for `vortex.dict`.
 public final class DictEncodingEncoder implements EncodingEncoder {
@@ -143,6 +150,9 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (dtype instanceof DType.Decimal decimal) {
+            return DecimalDict.cascade(decimal, data);
+        }
         if (dtype instanceof DType.Utf8 && data instanceof NullableData(Object rows, boolean[] rowValidity)) {
             EncodeResult dict = encodeNullableUtf8(dtype, rows, rowValidity, ctx);
             if (dict == null) {
@@ -553,5 +563,126 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     private record DictData(MemorySegment valuesBuf, Object valuesArr, Object codesArr, PType codePType, int len,
                             int dictSize, boolean nullableCodes) {
+    }
+
+    /// Rust 0.95's `DecimalDictScheme` estimate: [#integerDictRatio] over the valid values at
+    /// their stored width, skipped when none is valid or more than half are distinct.
+    ///
+    /// @param dtype the decimal dtype
+    /// @param data  the decimals, `BigDecimal[]` or a [NullableData] of them
+    /// @return the estimated ratio, or [Estimate#SKIP]
+    static Estimate decimalRatio(DType.Decimal dtype, Object data) {
+        return DecimalDict.ratio(dtype, data);
+    }
+
+    /// Rust 0.95's decimal dictionary (`builtins/dict/decimal.rs` over `dict_encode`'s decimal
+    /// builder).
+    private static final class DecimalDict {
+
+        /// The codes bar what Rust's pull rules keep off a decimal dict's codes, and the values
+        /// what they keep off its values; the values keep integer dictionaries, as a most
+        /// significant part can repeat.
+        private static final Set<EncodingId> CODES_EXCLUDED = Set.of(EncodingId.VORTEX_DICT,
+                EncodingId.VORTEX_SEQUENCE, EncodingId.FASTLANES_FOR, EncodingId.VORTEX_ZIGZAG,
+                EncodingId.FASTLANES_DELTA);
+        private static final Set<EncodingId> VALUES_EXCLUDED = Set.of(EncodingId.VORTEX_RUNEND,
+                EncodingId.FASTLANES_RLE);
+
+        private DecimalDict() {
+        }
+
+        /// Rust's decimal stats count the distinct valid values and the runs of equal valid values,
+        /// as the integer stats do.
+        static Estimate ratio(DType.Decimal dtype, Object data) {
+            Rows rows = Rows.of(data);
+            Set<BigInteger> distinct = new HashSet<>();
+            long valid = 0;
+            long runs = 0;
+            BigInteger previous = null;
+            for (int i = 0; i < rows.values().length; i++) {
+                if (!rows.valid(i)) {
+                    continue;
+                }
+                BigInteger value = rows.values()[i].unscaledValue();
+                distinct.add(value);
+                if (!value.equals(previous)) {
+                    runs++;
+                }
+                previous = value;
+                valid++;
+            }
+            if (valid == 0 || distinct.size() > valid / 2) {
+                return Estimate.SKIP;
+            }
+            return Estimate.ratio(integerDictRatio(dtype.byteWidth() * 8, valid, distinct.size(), valid / runs));
+        }
+
+        /// `dict_encode`: the distinct values in the order first seen, a null as one more,
+        /// invalid, entry where the first null is, and codes that are never null, narrowed to the
+        /// dictionary.
+        static CascadeStep cascade(DType.Decimal dtype, Object data) {
+            Rows rows = Rows.of(data);
+            BigDecimal[] values = rows.values();
+            Map<BigInteger, Integer> codeOf = new HashMap<>();
+            List<BigDecimal> entries = new ArrayList<>();
+            int nullCode = -1;
+            int[] codes = new int[values.length];
+            for (int i = 0; i < values.length; i++) {
+                if (!rows.valid(i)) {
+                    if (nullCode < 0) {
+                        nullCode = entries.size();
+                        entries.add(null);
+                    }
+                    codes[i] = nullCode;
+                    continue;
+                }
+                BigDecimal value = values[i];
+                codes[i] = codeOf.computeIfAbsent(value.unscaledValue(), _ -> {
+                    entries.add(value);
+                    return entries.size() - 1;
+                });
+            }
+            if (entries.isEmpty()) {
+                return CascadeStep.notApplicable();
+            }
+            BigDecimal[] dict = entries.toArray(BigDecimal[]::new);
+            Object dictData = dict;
+            DType valuesDtype = dtype.withNullable(false);
+            if (nullCode >= 0) {
+                boolean[] entryValidity = new boolean[dict.length];
+                Arrays.fill(entryValidity, true);
+                entryValidity[nullCode] = false;
+                dictData = new NullableData(dict, entryValidity);
+                valuesDtype = dtype.withNullable(true);
+            }
+            PType codePType = PType.narrowestUnsigned(dict.length - 1L);
+            byte[] meta = new ProtoDictMetadata(dict.length,
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codePType.ordinal()), null, null).encode();
+            EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_DICT, MemorySegment.ofArray(meta),
+                    new EncodeNode[]{null, null}, new int[0]);
+            MinMax stats = ZoneMapStats.ofDecimal(dtype, entries.stream().filter(Objects::nonNull)
+                    .toArray(BigDecimal[]::new));
+            return new CascadeStep(partialRoot, List.of(),
+                    List.of(new ChildSlot(new DType.Primitive(codePType, false),
+                                    PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT), 0,
+                                    CODES_EXCLUDED),
+                            new ChildSlot(valuesDtype, dictData, 1, VALUES_EXCLUDED)),
+                    PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
+        }
+
+        /// The decimals and their validity, `null` when every row is valid.
+        private record Rows(BigDecimal[] values, boolean[] validity) {
+
+            static Rows of(Object data) {
+                if (data instanceof NullableData(Object values, boolean[] validity)) {
+                    return new Rows((BigDecimal[]) values, validity);
+                }
+                return new Rows((BigDecimal[]) data, null);
+            }
+
+            boolean valid(int i) {
+                return validity == null || validity[i];
+            }
+        }
     }
 }
