@@ -50,8 +50,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// A nullable timestamp column is written as vortex-jni writes it: `vortex.datetimeparts`, with the
 /// validity on its days child as Rust's `split_temporal` keeps it, and no validity at all when every
-/// row is valid. The Java side used to decline datetimeparts for any chunk holding a null, writing
-/// `vortex.ext` over a masked i64, so the column's encoding changed with where its nulls fell.
+/// row is valid, unless the storage compresses smaller, as Rust compares the two. The Java side used
+/// to decline datetimeparts for any chunk holding a null, writing `vortex.ext` over a masked i64, so
+/// the column's encoding changed with where its nulls fell. With many nulls Rust 0.95 keeps the
+/// storage, FoR and bit-packing with the bitmap in it, not a `vortex.masked`.
 ///
 /// The whole encoding tree is compared, the zone-stats table included: unnarrowed 64-bit days made
 /// FoR beat run-length encoding, and the 4-row stats min/max were split into datetimeparts where
@@ -73,15 +75,18 @@ class NullableTimestampInteropIntegrationTest {
     static Stream<Arguments> shapes() {
         return Stream.of(
                 // nullable but every row valid: written without a validity, as Rust's AllValid
-                Arguments.of("no nulls", (IntPredicate) _ -> false),
-                Arguments.of("every 7th null", (IntPredicate) i -> i % 7 == 0),
-                Arguments.of("one null", (IntPredicate) i -> i == 5),
-                Arguments.of("nulls in the second half", (IntPredicate) i -> i >= ROWS / 2 && i % 3 == 0));
+                Arguments.of("no nulls", (IntPredicate) _ -> false, "vortex.datetimeparts"),
+                // the bitmap costs the days part as much as the storage, which then packs smaller
+                Arguments.of("every 7th null", (IntPredicate) i -> i % 7 == 0, "vortex.ext"),
+                Arguments.of("one null", (IntPredicate) i -> i == 5, "vortex.datetimeparts"),
+                Arguments.of("nulls in the second half", (IntPredicate) i -> i >= ROWS / 2 && i % 3 == 0,
+                        "vortex.ext"));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("shapes")
-    void javaWritesTheEncodingTreeJniWrites(String name, IntPredicate isNull, @TempDir Path tmp) throws Exception {
+    void javaWritesTheEncodingTreeJniWrites(String name, IntPredicate isNull, String root,
+                                            @TempDir Path tmp) throws Exception {
         // Given
         Path jniFile = tmp.resolve("jni.vortex");
         Path javaFile = tmp.resolve("java.vortex");
@@ -92,7 +97,7 @@ class NullableTimestampInteropIntegrationTest {
         writeWithJava(javaFile, isNull);
 
         // Then
-        assertThat(dataColumn(expected).getFirst()).contains("vortex.datetimeparts");
+        assertThat(dataColumn(expected).getFirst()).contains(root);
         assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
@@ -121,9 +126,11 @@ class NullableTimestampInteropIntegrationTest {
     /// all-default metadata Rust writes as no bytes; Java read that as missing metadata (#634).
     @Test
     void jniWritesPartsThatAllFitAByte_javaReadsThem(@TempDir Path tmp) throws Exception {
-        // Given — day 0, second i, microsecond i: every part at most 255
+        // Given — day 0, second i % 256, microsecond i / 256: every part at most 255. The two
+        // parts vary independently, so the storage has no short period: repeating every 256 rows,
+        // it dictionary-encoded smaller than the parts and Rust 0.95 kept it
         Path jniFile = tmp.resolve("jni.vortex");
-        IntToLongFunction micros = i -> (i % 256) * 1_000_000L + i % 256;
+        IntToLongFunction micros = i -> (i % 256) * 1_000_000L + i / 256 % 256;
         writeWithJni(jniFile, i -> i % 7 == 0, micros);
 
         // When
