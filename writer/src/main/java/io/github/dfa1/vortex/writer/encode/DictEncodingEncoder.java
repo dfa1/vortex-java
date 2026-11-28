@@ -437,13 +437,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         int[] codes = new int[len];
         long[] firstSeenRaw = new long[16];
         int dictSize = 0;
-        int lastNewRow = -1;
-        int lastValidRow = -1;
         for (int i = 0; i < len; i++) {
             if (validity != null && !validity[i]) {
                 continue;
             }
-            lastValidRow = i;
             long raw = rawBits(data, ptype, i);
             int code = index.get(canonicalBits(raw, ptype));
             if (code < 0) {
@@ -454,13 +451,12 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 }
                 firstSeenRaw[dictSize] = raw;
                 dictSize++;
-                lastNewRow = i;
             }
             codes[i] = code;
         }
 
         // The codes so far are first-seen; Rust's are the order of its distinct-values map
-        int[] rank = DictValueOrder.ranks(ptype, firstSeenRaw, dictSize, len, lastValidRow > lastNewRow);
+        int[] rank = DictValueOrder.ranks(ptype, firstSeenRaw, dictSize, codes, validity);
         long[] rustRaw = new long[dictSize];
         for (int c = 0; c < dictSize; c++) {
             rustRaw[rank[c]] = firstSeenRaw[c];

@@ -27,7 +27,7 @@ class DictValueOrderTest {
         long[] raw = {0, 1, 2};
 
         // When
-        int[] result = DictValueOrder.ranks(PType.I32, raw, 3, 3, false);
+        int[] result = DictValueOrder.ranks(PType.I32, raw, 3, new int[3], null);
 
         // Then
         assertThat(result).containsExactly(0, 2, 1);
@@ -49,7 +49,7 @@ class DictValueOrderTest {
     @MethodSource("columns")
     void ranksAreAPermutationOfTheCodes(PType ptype, long[] raw, int len) {
         // When
-        int[] result = DictValueOrder.ranks(ptype, raw, raw.length, len, true);
+        int[] result = DictValueOrder.ranks(ptype, raw, raw.length, firstSeen(raw.length, len), null);
 
         // Then
         int[] sorted = result.clone();
@@ -67,10 +67,10 @@ class DictValueOrderTest {
         long[] asU8 = Arrays.stream(values).map(v -> (byte) v).toArray();
 
         // When
-        int[] result = DictValueOrder.ranks(PType.U8, asU8, asU8.length, 8192, false);
+        int[] result = DictValueOrder.ranks(PType.U8, asU8, asU8.length, new int[8192], null);
 
         // Then
-        assertThat(result).isEqualTo(DictValueOrder.ranks(PType.I16, values, values.length, 8192, false));
+        assertThat(result).isEqualTo(DictValueOrder.ranks(PType.I16, values, values.length, new int[8192], null));
     }
 
     /// 24 keys hashing to buckets 0 to 3 of 64 fill a run past 16 buckets: x86 then probes the
@@ -82,30 +82,34 @@ class DictValueOrderTest {
         long[] raw = collidingInts(24, 64);
 
         // When
-        int[] result = DictValueOrder.ranks(PType.I32, raw, raw.length, 64, false, 16);
+        int[] result = DictValueOrder.ranks(PType.I32, raw, raw.length, new int[64], null, 16);
 
         // Then
-        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.I32, raw, raw.length, 64, false, 8));
+        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.I32, raw, raw.length, new int[64], null, 8));
     }
 
-    /// 28 distinct floats fill a set sized for 56 rows exactly; a later duplicate grows it, so
-    /// Rust iterates a table twice the size.
+    /// Rust 0.95 extends the float set a 64-row chunk at a time, reserving the chunk's valid
+    /// rows first. 28 distinct floats in 56 valid rows reserve 56 and iterate a 64-bucket table;
+    /// the same 28 with 28 nulls reserve 28, which the 56-row set already holds, and iterate 32.
     @Test
-    void duplicateOnAFullFloatSetGrowsIt() {
+    void aChunkReservesItsValidRows() {
         // Given
         long[] raw = new Random(13).doubles(28).mapToLong(Double::doubleToRawLongBits).toArray();
+        int[] codes = firstSeen(raw.length, 56);
+        boolean[] firstHalfValid = new boolean[56];
+        Arrays.fill(firstHalfValid, 0, 28, true);
 
         // When
-        int[] result = DictValueOrder.ranks(PType.F64, raw, raw.length, 56, true);
+        int[] result = DictValueOrder.ranks(PType.F64, raw, raw.length, codes, null);
 
         // Then
-        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.F64, raw, raw.length, 56, false));
+        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.F64, raw, raw.length, codes, firstHalfValid));
     }
 
     @Test
     void noValuesNoRanks() {
         // When
-        int[] result = DictValueOrder.ranks(PType.I32, new long[0], 0, 10, false);
+        int[] result = DictValueOrder.ranks(PType.I32, new long[0], 0, new int[10], null);
 
         // Then
         assertThat(result).isEmpty();
@@ -124,6 +128,15 @@ class DictValueOrderTest {
     }
 
     /// `count` wide `I32` values whose `FxHasher` hash falls in buckets 0 to 3 of a table of
+    /// Rows whose first `distinct` are each new and the rest repeat them in turn.
+    private static int[] firstSeen(int distinct, int len) {
+        int[] codes = new int[len];
+        for (int i = 0; i < len; i++) {
+            codes[i] = i % distinct;
+        }
+        return codes;
+    }
+
     /// `buckets`, as `DictValueOrderInteropIntegrationTest#zoneMinsPilingUpPastAGroup` draws them.
     private static long[] collidingInts(int count, int buckets) {
         Random random = new Random(17);
