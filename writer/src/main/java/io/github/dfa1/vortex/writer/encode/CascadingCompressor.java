@@ -194,6 +194,18 @@ public final class CascadingCompressor {
         return values;
     }
 
+    /// Rust's `exact_uncompressed_size` of the `sampleSize` rows a trial encodes, the baseline
+    /// every scheme must beat: the values, plus a plain bitmap when the sample holds a null. A
+    /// scheme competes with the canonical array, not with the values and their validity
+    /// compressed, so bit-packing a nullable dictionary pool beats it by its bitmap's bytes.
+    private static long canonicalBytes(DType dtype, Object data, int sampleSize, long seed) {
+        if (!(data instanceof NullableData nullable) || nullable.nullCount() == 0) {
+            return primitiveBytes(dtype, sampleSize);
+        }
+        Object sample = sampleSize < nullable.length() ? stratifiedSample(data, sampleSize, seed) : data;
+        return uncompressedBytes(dtype, sample);
+    }
+
     /// Whether `enc` may compete for `data`: it accepts the dtype, is not excluded, and, for a
     /// nullable primitive, keeps the validity itself, as every Rust scheme does on its array.
     private static boolean eligible(EncodingEncoder enc, DType dtype, Object data, EncodeContext ctx) {
@@ -414,7 +426,7 @@ public final class CascadingCompressor {
             return spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
         }
 
-        return competeAndEncode(dtype, input, ctx, sampleSize -> primitiveBytes(dtype, sampleSize));
+        return competeAndEncode(dtype, input, ctx, sampleSize -> canonicalBytes(dtype, data, sampleSize, ctx.sampleSeed()));
     }
 
     /// A bool array stays `vortex.bool` unless it is one value and that is smaller as a
