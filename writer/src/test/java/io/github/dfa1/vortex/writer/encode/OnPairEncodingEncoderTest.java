@@ -55,6 +55,28 @@ class OnPairEncodingEncoderTest {
                 Arguments.of("allEmpty", new String[]{"", "", ""}));
     }
 
+    /// `rand`'s `IncreasingUniform`, which orders OnPair's training rows as Rust's does: each
+    /// index lies in `[0, n]` as `n` grows, several drawn from one `u32`, and from `n = 0` the
+    /// first is 0 without a draw.
+    @Test
+    void increasingUniform_drawsEachIndexWithinTheGrowingRange() {
+        // Given
+        OnPairEncodingEncoder.IncreasingUniform sut =
+                new OnPairEncodingEncoder.IncreasingUniform(new SampleRng(42), 0);
+
+        // When
+        int[] result = new int[2000];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = sut.nextIndex();
+        }
+
+        // Then
+        assertThat(result[0]).isZero();
+        for (int i = 0; i < result.length; i++) {
+            assertThat(result[i]).isBetween(0, i);
+        }
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("corpora")
     void encode_roundTripsThroughTheDecoder(String name, String[] data) {

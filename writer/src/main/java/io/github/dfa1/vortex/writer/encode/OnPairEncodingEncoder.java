@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.SplittableRandom;
 
 /// Write-only encoder for `vortex.onpair` (edition `core2026.08.1`).
 ///
@@ -192,7 +191,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
         /// Maximum token length; also the read padding the Rust decoder requires past the last token.
         static final int MAX_TOKEN_SIZE = 16;
-        /// `onpair::DEFAULT_CONFIG`: 2^12 tokens, 15% byte sample, seed 42.
+        /// `onpair::DEFAULT_CONFIG`: 2^12 tokens, 15% byte sample, seed 42 (Rust's `StdRng`).
         static final int DICT_CAPACITY = 1 << 12;
         static final double SAMPLE_FRACTION = 0.15;
         /// Rust 0.95's `SAMPLE_TRAINING_FRACTION`: on a compression sample of about a thousand
@@ -268,8 +267,45 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             return new OnPair(padded, dictOffsets, codes, codesOffsets, lengths);
         }
 
-        /// `discover_tokens` over a seeded random row order, until the byte budget or the
-        /// dictionary capacity runs out.
+        /// `make_training_order`: the rows training scans, in scan order. Rust partially shuffles
+        /// the row ids with `StdRng` seeded [#SEED], selecting twice the budget's share of rows
+        /// plus 1024, and doubles the selection in the rare case it falls short of the budget.
+        static int[] trainingOrder(int[] offsets, int n, long totalBytes, double fraction) {
+            long budget = (long) (totalBytes * fraction);
+            int shuffle = (int) Math.min(n, (long) (Math.min(fraction * 2.0, 1.0) * n) + 1024);
+            while (true) {
+                int[] order = new int[n];
+                for (int i = 0; i < n; i++) {
+                    order[i] = i;
+                }
+                partialShuffle(order, new SampleRng(SEED), shuffle);
+                int start = n - shuffle;
+                long selected = 0;
+                for (int i = start; i < n; i++) {
+                    selected += offsets[order[i] + 1] - offsets[order[i]];
+                }
+                if (selected > budget || shuffle == n) {
+                    return Arrays.copyOfRange(order, start, n);
+                }
+                shuffle = (int) Math.min(2L * shuffle, n);
+            }
+        }
+
+        /// `rand` 0.10's `partial_shuffle`: the last `amount` elements become a random selection of
+        /// the whole slice, each swapped with an index [IncreasingUniform] draws.
+        static void partialShuffle(int[] values, SampleRng rng, int amount) {
+            int first = Math.max(0, values.length - amount);
+            IncreasingUniform chooser = new IncreasingUniform(rng, first);
+            for (int i = first; i < values.length; i++) {
+                int index = chooser.nextIndex();
+                int tmp = values[i];
+                values[i] = values[index];
+                values[index] = tmp;
+            }
+        }
+
+        /// `discover_tokens` over the training order, until the byte budget or the dictionary
+        /// capacity runs out.
         static Trie train(VarBinBytes.Rows rows, double fraction) {
             Trie trie = new Trie();
             byte[] single = new byte[1];
@@ -280,18 +316,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             int n = rows.count();
             int[] offsets = rows.offsets();
             byte[] bytes = rows.bytes();
-            int[] order = new int[n];
-            for (int i = 0; i < n; i++) {
-                order[i] = i;
-            }
-            SplittableRandom random = new SplittableRandom(SEED);
-            for (int i = n - 1; i > 0; i--) {
-                int j = random.nextInt(i + 1);
-                int tmp = order[i];
-                order[i] = order[j];
-                order[j] = tmp;
-            }
             long totalBytes = (long) offsets[n] - offsets[0];
+            int[] order = trainingOrder(offsets, n, totalBytes, fraction);
             Threshold threshold = new Threshold((long) DICT_CAPACITY - 256, totalBytes, fraction);
             LongIntMap pairs = new LongIntMap(1024);
             for (int r : order) {
@@ -331,6 +357,53 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 }
             }
             return trie;
+        }
+    }
+
+    /// `rand` 0.10's `IncreasingUniform`: a number in `[0, n]`, then `n` grows by one. One `u32`
+    /// draw serves several indices: it is uniform over `(n + 1)(n + 2)...(n + k)`, the longest such
+    /// product that fits 32 bits, and each index is its remainder by the next factor.
+    static final class IncreasingUniform {
+        private static final long U32_MAX = 0xFFFF_FFFFL;
+        private final SampleRng rng;
+        private long n;
+        private long chunk;
+        private int chunkRemaining;
+
+        IncreasingUniform(SampleRng rng, long n) {
+            this.rng = rng;
+            this.n = n;
+            this.chunk = 0;
+            // with n = 0 the first index is always 0, so no draw is needed
+            this.chunkRemaining = n == 0 ? 1 : 0;
+        }
+
+        int nextIndex() {
+            long nextN = n + 1;
+            int nextRemaining;
+            if (chunkRemaining == 0) {
+                long product = nextN;
+                long current = nextN + 1;
+                while (product <= U32_MAX / current) {
+                    product *= current;
+                    current++;
+                }
+                // random_range(..product) on a u32, the ints read unsigned
+                chunk = rng.nextIntInclusive(0, (int) (product - 1)) & U32_MAX;
+                nextRemaining = (int) (current - nextN) - 1;
+            } else {
+                nextRemaining = chunkRemaining - 1;
+            }
+            long result;
+            if (nextRemaining == 0) {
+                result = chunk;
+            } else {
+                result = chunk % nextN;
+                chunk /= nextN;
+            }
+            chunkRemaining = nextRemaining;
+            n = nextN;
+            return (int) result;
         }
     }
 
