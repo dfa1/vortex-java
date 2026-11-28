@@ -352,23 +352,15 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             long[] excPosArr = Arrays.copyOf(exceptions.positions, exceptions.size);
             short[] excValsArr = Arrays.copyOf(exceptions.values, exceptions.size);
 
-            // Rust's compress_patches: indices narrowed to the smallest unsigned type that holds them,
-            // values left as they are (a constant array when they are all equal), and none of it
-            // bit-packed. Bit-packing pads to 1024-value blocks, which inflates the handful of
-            // exceptions of a small sample and biases the cascade away from ALP-RD.
-            PType idxType = PatchBuffers.narrowestUnsigned(excPosArr[excPosArr.length - 1]);
-            int idxOffset = allBuffers.size();
-            allBuffers.add(EncodedBuffer.of(PatchBuffers.unsigned(excPosArr, idxType, ctx), idxType));
-            EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, idxOffset);
-
-            EncodeNode valNode = PatchBuffers.valuesNode(excValsArr, PType.U16, allBuffers, ctx);
-
-            patchesMeta = new ProtoPatchesMetadata(
-                    exceptions.size,
-                    0L,
-                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxType.ordinal()),
-                    null, null, null);
-            children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
+            // Rust 0.95's encode_generic records each 1024-row chunk's first exception
+            // (patch_chunk_offsets, #11644), and compress_patches narrows the indices and those
+            // offsets and leaves none of it bit-packed. Bit-packing pads to 1024-value blocks,
+            // which inflates the handful of exceptions of a small sample and biases the cascade
+            // away from ALP-RD.
+            PatchBuffers patchBuffers = PatchBuffers.of(excPosArr, leftCodes.length, ctx);
+            EncodeNode[] patchNodes = patchBuffers.append(excValsArr, PType.U16, allBuffers, ctx);
+            patchesMeta = patchBuffers.meta(exceptions.size);
+            children = new EncodeNode[]{leftNode, rightNode, patchNodes[0], patchNodes[1], patchNodes[2]};
         }
 
         byte[] metaBytes = new ProtoALPRDMetadata(
