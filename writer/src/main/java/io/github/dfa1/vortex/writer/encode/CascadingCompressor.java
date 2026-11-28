@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.DoubleSupplier;
 import java.util.function.IntToLongFunction;
 import java.util.function.Supplier;
 
@@ -155,25 +156,50 @@ public final class CascadingCompressor {
     /// The draw is Rust's, bit for bit ([SampleRng]), including the draw for a partition with no
     /// slack: the sample picks the winner on borderline arrays, so it has to be the same sample.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
-        int strideCount = Math.max(1, sampleSize / SAMPLE_STRIDE);
-        SampleRng rng = new SampleRng(seed);
         int dstOff = 0;
-        int partRemainder = n % strideCount;
-        int partShortStep = n / strideCount;
+        for (int[] slice : slices(n, sampleSize, Math.max(1, sampleSize / SAMPLE_STRIDE), seed)) {
+            int len = slice[1] - slice[0];
+            copier.copy(slice[0], dstOff, len);
+            dstOff += len;
+        }
+    }
+
+    /// Rust's `sample_slices`: `count` slices of `sliceLen` rows, one from each of `count` equal
+    /// partitions of `[0, n)`, or the whole array when they would cover it.
+    ///
+    /// @param n        the array's length
+    /// @param sliceLen rows per slice
+    /// @param count    the number of slices
+    /// @param seed     the sampling seed
+    /// @return `{start, end}` pairs, half-open, in order
+    static List<int[]> sampleSlices(int n, int sliceLen, int count, long seed) {
+        long total = (long) sliceLen * count;
+        if (total >= n) {
+            return List.of(new int[]{0, n});
+        }
+        return slices(n, (int) total, count, seed);
+    }
+
+    /// `stratified_slices` without its whole-array shortcut: `sampleSize` rows spread over
+    /// `count` partitions, each partition's share drawn at a random offset in it.
+    private static List<int[]> slices(int n, int sampleSize, int count, long seed) {
+        SampleRng rng = new SampleRng(seed);
+        int partRemainder = n % count;
+        int partShortStep = n / count;
         int partLongStep = partShortStep + 1;
-        int sampleRemainder = sampleSize % strideCount;
-        int sampleShortStep = sampleSize / strideCount;
+        int sampleRemainder = sampleSize % count;
+        int sampleShortStep = sampleSize / count;
         int sampleLongStep = sampleShortStep + 1;
-        for (int s = 0; s < strideCount; s++) {
+        List<int[]> out = new ArrayList<>(count);
+        for (int s = 0; s < count; s++) {
             int partStart = s * partShortStep + Math.min(s, partRemainder);
             int partLen = s < partRemainder ? partLongStep : partShortStep;
             int sampleLen = s < sampleRemainder ? sampleLongStep : sampleShortStep;
             int maxStart = Math.max(0, partLen - sampleLen);
-            int offsetInPart = rng.nextIntInclusive(0, maxStart);
-            int srcOff = partStart + offsetInPart;
-            copier.copy(srcOff, dstOff, sampleLen);
-            dstOff += sampleLen;
+            int srcOff = partStart + rng.nextIntInclusive(0, maxStart);
+            out.add(new int[]{srcOff, srcOff + sampleLen});
         }
+        return out;
     }
 
     private static long primitiveBytes(DType dtype, int n) {
@@ -585,7 +611,7 @@ public final class CascadingCompressor {
         int sampleSize = sampleSize(n, ctx);
         Choice choice = chooseBest(dtype, input, ctx, baselineFn.applyAsLong(sampleSize),
                 () -> sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data);
-        return encodeChoice(choice, dtype, data, ctx);
+        return encodeChoice(choice, dtype, input, ctx);
     }
 
     /// Runs the winner of a selection on the full data, or the first accepting encoder when no
@@ -595,7 +621,8 @@ public final class CascadingCompressor {
     /// Rust's `choose_and_compress` accepts it (`compressor/cascade.rs`): a sample can favor a
     /// scheme the full array does not, such as bit-packing a short array that pads to a whole
     /// 1024-value block. Otherwise the array stays canonical.
-    private EncodeResult encodeChoice(Choice choice, DType dtype, Object data, EncodeContext ctx) {
+    private EncodeResult encodeChoice(Choice choice, DType dtype, ArrayAndStats input, EncodeContext ctx) {
+        Object data = input.data();
         EncodingEncoder canonical = findPrimitiveEncoding(dtype, ctx.excluded());
         if (choice.encoder() == null) {
             return spliceResult(canonical, dtype, data, ctx);
@@ -603,7 +630,18 @@ public final class CascadingCompressor {
         var event = new WinnerEvent();
         event.begin();
         boolean[] notApplicable = new boolean[1];
-        EncodeResult result = spliceResult(choice.encoder(), dtype, data, ctx, notApplicable);
+        // Rust reuses a winner's trial output, and prefers a trial to a winner picked on an
+        // estimate that comes out larger (choose_and_compress)
+        EncodeResult trial = input.trial();
+        EncodeResult result;
+        if (trial != null && choice.encoder().encodingId().equals(input.trialScheme())) {
+            result = trial;
+        } else {
+            result = spliceResult(choice.encoder(), dtype, data, ctx, notApplicable);
+            if (trial != null && totalBytes(trial) < totalBytes(result)) {
+                result = trial;
+            }
+        }
         boolean accepted = !(dtype instanceof DType.Primitive && choice.encoder() != canonical
                 && totalBytes(result) >= uncompressedBytes(dtype, data));
         // a scheme that did not apply was reported where it failed, and the result is another one's
@@ -630,7 +668,7 @@ public final class CascadingCompressor {
     /// inlined in it (a null row is empty), plus its validity as Rust's
     /// `validity_uncompressed_size_in_bytes` sizes it: nothing when every row is valid, the 2-byte
     /// `false` constant when none is, else a packed bitmap.
-    private static long viewBytes(Object data, int sampleSize, long seed) {
+    static long viewBytes(Object data, int sampleSize, long seed) {
         Object sample = sampleSize < RowCount.of(data) ? stratifiedSample(data, sampleSize, seed) : data;
         long validityBytes = 0;
         if (sample instanceof NullableData nullable) {
@@ -693,7 +731,7 @@ public final class CascadingCompressor {
         int sampleSize = sampleSize(n, ctx);
         Object sample = sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
         Choice choice = chooseBest(dtype, input, ctx, uncompressedBytes(dtype, sample), () -> sample);
-        return encodeChoice(choice, dtype, data, ctx);
+        return encodeChoice(choice, dtype, input, ctx);
     }
 
     /// The winner of a selection and the size it was scored at on the sample (or its estimate).
@@ -728,6 +766,8 @@ public final class CascadingCompressor {
         double bestSize = baseline;
         boolean bestEstimated = false;
         List<EncodingEncoder> deferred = new ArrayList<>();
+        List<EncodingEncoder> callbackEncoders = new ArrayList<>();
+        List<TrialEstimate> callbacks = new ArrayList<>();
         for (EncodingEncoder enc : encodings) {
             if (!eligible(enc, dtype, input.data(), ctx)) {
                 continue;
@@ -753,15 +793,19 @@ public final class CascadingCompressor {
                 }
             } else if (est == Estimate.COMPLETE) {
                 deferred.add(enc);
+            } else if (est instanceof TrialEstimate callback) {
+                callbackEncoders.add(enc);
+                callbacks.add(callback);
             }
         }
-        if (deferred.isEmpty()) {
+        if (deferred.isEmpty() && callbacks.isEmpty()) {
             return new Choice(best, bestSize, bestEstimated, baseline);
         }
 
-        Object measured = sample.get();
+        Supplier<Object> measuredSample = memoize(sample);
         EncodeContext sampleCtx = ctx.withSampling();
         for (EncodingEncoder enc : deferred) {
+            Object measured = measuredSample.get();
             var event = new CandidateEvent();
             event.begin();
             CascadeStep step = enc.encodeCascade(dtype, measured, sampleCtx);
@@ -782,7 +826,57 @@ public final class CascadingCompressor {
                 bestEstimated = false;
             }
         }
+        // Rust 0.95 runs every sampled estimate before any callback, so a callback sees the best
+        // of them and can skip a trial that cannot beat it
+        for (int c = 0; c < callbacks.size(); c++) {
+            EncodingEncoder enc = callbackEncoders.get(c);
+            Double bestRatio = null;
+            if (best != null) {
+                bestRatio = bestSize == 0 ? Double.POSITIVE_INFINITY : baseline / bestSize;
+            }
+            DoubleSupplier sampled = () -> {
+                CascadeStep step = enc.encodeCascade(dtype, measuredSample.get(), sampleCtx);
+                if (!step.applicable()) {
+                    return Double.NaN;
+                }
+                long size = measureStep(enc, step, sampleCtx);
+                return size == 0 ? Double.NaN : (double) baseline / size;
+            };
+            Estimate est = callbacks.get(c).trial().run(this, dtype, input, ctx, bestRatio, sampled);
+            if (est instanceof Estimate.Ratio(double ratio)) {
+                double size = baseline / ratio;
+                CompressorEvents.candidate(new CandidateEvent(), ctx, new CompressorEvents.Evaluation(
+                        enc.encodingId(), "trial", ctx.sample(), baseline, ratio, -1));
+                if (size < bestSize) {
+                    best = enc;
+                    bestSize = size;
+                    bestEstimated = true;
+                }
+            }
+        }
         return new Choice(best, bestSize, bestEstimated, baseline);
+    }
+
+    private static <T> Supplier<T> memoize(Supplier<T> supplier) {
+        List<T> cell = new ArrayList<>(1);
+        return () -> {
+            if (cell.isEmpty()) {
+                cell.add(supplier.get());
+            }
+            return cell.getFirst();
+        };
+    }
+
+    /// Encodes `data` with `encoder` as a winner is encoded, its children cascaded: a trial
+    /// estimate's complete output.
+    ///
+    /// @param encoder the scheme to run
+    /// @param dtype   the input's dtype
+    /// @param data    the input
+    /// @param ctx     the encode context
+    /// @return the encoded array, another scheme's when `encoder` does not apply
+    EncodeResult encodeWith(EncodingEncoder encoder, DType dtype, Object data, EncodeContext ctx) {
+        return spliceResult(encoder, dtype, data, ctx);
     }
 
     /// Derives the context a child slot is filled under: one cascade level deeper, with the slot's

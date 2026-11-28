@@ -66,7 +66,12 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     @Override
     public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
-        // Stats path only covers Primitive (Utf8 still uses sample-encoded selection).
+        // Rust 0.95's StringDictScheme estimates with a bounded trial of the complete input
+        // (bytes_dictionary_estimate), resolved after every sampled scheme
+        if (dtype instanceof DType.Utf8) {
+            return new TrialEstimate((compressor, utf8, input, trialCtx, bestRatio, sampled) ->
+                    StringDictTrial.estimate(this, compressor, utf8, input, trialCtx, bestRatio, sampled));
+        }
         if (!(dtype instanceof DType.Primitive p)) {
             return Estimate.COMPLETE;
         }
@@ -190,17 +195,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             keys[i] = textKey(data, i);
             valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
-            // Distinct count only grows as the scan proceeds, so once it alone already exceeds
-            // n/2 the final count is guaranteed to too — the same "dict can't win" rule
-            // DictEncodingEncoder#expectedRatio applies to Primitive via stats, mirrored here
-            // since Utf8 has no shared-stats pre-pass (#395-style: don't finish building
-            // structure the competition is already guaranteed to discard). Bailing via
-            // CascadeStep.notApplicable() is safe both when this call is measuring a sample
-            // (never wins) and, per spliceResult's applicable() check, if it were ever re-run
-            // as a winner on full data.
-            if (valueMap.size() * 2 > n) {
-                return CascadeStep.notApplicable();
-            }
         }
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
@@ -250,7 +244,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     ///                 row is ignored)
     /// @param validity per-row validity
     /// @param ctx      the encode context of the enclosing masked column
-    /// @return the encoded dict, or `null` when more than half the rows are distinct (Dict cannot win)
+    /// @return the encoded dict
     static EncodeResult encodeNullableUtf8(DType dtype, Object rows, boolean[] validity, EncodeContext ctx) {
         int n = validity.length;
         Object[] keys = new Object[n];
@@ -258,10 +252,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             keys[i] = validity[i] ? textKey(rows, i) : null;
             valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
-            // Same "dict can't win" bail-out as encodeUtf8Cascade.
-            if (valueMap.size() * 2 > n) {
-                return null;
-            }
         }
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);

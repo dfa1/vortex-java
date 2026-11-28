@@ -6,7 +6,7 @@ package io.github.dfa1.vortex.writer.encode;
 /// Candidates are scored as Rust scores them, by compression ratio (raw bytes over encoded
 /// bytes, higher wins, only above 1 counts): a [Ratio] supplies it from stats alone, [#COMPLETE]
 /// has it measured by encoding a sample.
-public sealed interface Estimate {
+public sealed interface Estimate permits Estimate.Verdict, Estimate.Ratio, TrialEstimate {
 
     /// Encoder is incompatible with this input, or cannot win on it; exclude it.
     Estimate SKIP = Verdict.SKIP;

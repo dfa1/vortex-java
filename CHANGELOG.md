@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An ALP-RD array with exceptions records where each 1024-row chunk's patches start, as Rust 0.95 writes it. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A float dictionary inside a column's compression orders its values as Rust 0.95 does. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A nullable timestamp column is written as its compressed storage when that is smaller than its date-time parts, as Rust 0.95 writes it, instead of always as date-time parts. ([#768](https://github.com/dfa1/vortex-java/pull/768))
+- A string column is dictionary-encoded when a trial dictionary of the whole chunk wins, as Rust 0.95 decides it, instead of whenever under half its values are distinct. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A decimal column that Rust 0.95 writes as a dict layout now reads its values instead of failing. ([#763](https://github.com/dfa1/vortex-java/pull/763))
 - A list, fixed-size list, map or struct column that Rust 0.95 writes as a constant or sparse chunk now reads its values instead of failing. ([#762](https://github.com/dfa1/vortex-java/pull/762))
 - A string column whose first 8192 rows hold a single value is written as plain chunks, as Rust does, instead of a dict layout up to 9% bigger. ([#722](https://github.com/dfa1/vortex-java/issues/722))
