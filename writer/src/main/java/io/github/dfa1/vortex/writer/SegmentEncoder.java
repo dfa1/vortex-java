@@ -83,10 +83,6 @@ final class SegmentEncoder {
     private final WriteRegistry defaultRegistry;
     private final List<EncodingEncoder> cascadeCodecs;
     private final WriteRegistry cascadeRegistry;
-    // The dict-layout probe's codecs: the cascade with the integer dictionary back in, as Rust's
-    // probe is its full compressor while its data compressor leaves IntDictScheme out.
-    private final List<EncodingEncoder> probeCodecs;
-    private final WriteRegistry probeRegistry;
     // Edition guard (issue #301): the cumulative member set of every WriteOptions#editions()
     // family enabled for this writer, or empty when no edition is configured (guard off).
     // editionExcluded is its complement over every well-known encoding id plus the custom encoders this writer holds
@@ -116,10 +112,6 @@ final class SegmentEncoder {
         // the caller left out would produce a file their own read registry may not decode.
         this.cascadeCodecs = defaultCodecs ? buildCascadeCodecs(options) : this.encodings;
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
-        this.probeCodecs = this.cascadeCodecs.stream()
-                .map(e -> e instanceof DictEncodingEncoder ? new DictEncodingEncoder() : e)
-                .toList();
-        this.probeRegistry = buildRegistry(this.probeCodecs);
         this.editionAllowed = editionAllowed(options.editions());
         // before the column encoders, which seed every context they build with it
         this.editionExcluded = editionExcluded(this.editionAllowed, this.encodings, this.cascadeCodecs);
@@ -251,9 +243,9 @@ final class SegmentEncoder {
         }
         Object block = Repartitioner.head(data, Math.min(Repartitioner.BLOCK_ROWS, RowCount.of(data)));
         try (Arena arena = Arena.ofConfined()) {
-            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded)
+            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
                     .withTrace(EncodeTrace.of(column.value(), -1));
-            EncodeResult result = new CascadingCompressor(probeCodecs).encode(colDtype, block, ctx);
+            EncodeResult result = new CascadingCompressor(cascadeCodecs).encode(colDtype, block, ctx);
             return probeChoseDict(result.rootNode());
         }
     }
@@ -274,11 +266,11 @@ final class SegmentEncoder {
     /// struct itself (including the nullable `bounded_max` state) and falls back to canonical
     /// encodings for any field no candidate accepts.
     ///
-    /// The candidates are the probe's: Rust compresses stats tables with its full compressor,
-    /// integer dictionaries included, and keeps `IntDictScheme` out of the data compressor only
-    /// (`vortex-file` `strategy.rs`), so a zone's `null_count` column can be a `vortex.dict`.
+    /// The candidates are the cascade's: Rust compresses stats tables with its full compressor,
+    /// integer dictionaries included (`vortex-file` `strategy.rs`), so a zone's `null_count`
+    /// column can be a `vortex.dict`.
     EncodingEncoder zoneTableEncoder() {
-        List<EncodingEncoder> codecs = probeCodecs;
+        List<EncodingEncoder> codecs = cascadeCodecs;
         return new EncodingEncoder() {
             @Override
             public EncodingId encodingId() {
@@ -520,11 +512,10 @@ final class SegmentEncoder {
         // to raw vortex.primitive or dict, matching neither the Rust reference (which uses alprd) nor
         // its size (#304). Registered on WriteRegistry already; this adds it as a top-level candidate.
         codecs.add(new AlpRdEncodingEncoder());
-        // Rust's file writer keeps integers out of the data cascade because its DictStrategy
-        // dictionary-encodes suitable columns as a layout. That is our global dictionary: with it
-        // off (a streaming CSV import cannot buffer a whole column), an integer chunk keeps its
-        // per-chunk dictionary, or a low-cardinality integer column loses its dictionary entirely.
-        codecs.add(options.globalDict() ? DictEncodingEncoder.forDataCascade() : new DictEncodingEncoder());
+        // Rust 0.95's file writer compresses data with its full compressor, integer dictionaries
+        // included; only the codes of a dict layout leave IntDictScheme out (vortex-file
+        // strategy.rs), which the global dictionary asks for when it writes them.
+        codecs.add(new DictEncodingEncoder());
         codecs.add(new SparseEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).

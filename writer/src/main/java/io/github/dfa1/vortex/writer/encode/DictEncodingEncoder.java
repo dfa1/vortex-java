@@ -35,27 +35,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     private static final Set<EncodingId> CODES_EXCLUDED =
             Set.of(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
 
-    private final boolean integers;
-
     /// A dictionary encoder for every primitive and string dtype.
     public DictEncodingEncoder() {
-        this(true);
-    }
-
-    private DictEncodingEncoder(boolean integers) {
-        this.integers = integers;
-    }
-
-    /// The dictionary encoder of the writer's data cascade: Rust's file writer excludes
-    /// `IntDictScheme` from the data compressor (`vortex-file` `strategy.rs`: a dictionary over
-    /// the columns that suit one is applied once, as a layout, so a per-chunk integer dictionary
-    /// would only redundantly dictionary-encode the codes), so integers never get a dictionary
-    /// inside the cascade. Floats and strings still do, as `FloatDictScheme` and the string
-    /// schemes stay in.
-    ///
-    /// @return an encoder that accepts floats and strings but not integers
-    public static DictEncodingEncoder forDataCascade() {
-        return new DictEncodingEncoder(false);
     }
 
     @Override
@@ -65,8 +46,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        if (dtype instanceof DType.Primitive p) {
-            return integers || p.ptype().isFloating();
+        if (dtype instanceof DType.Primitive) {
+            return true;
         }
         return dtype instanceof DType.Utf8;
     }

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A zone map's metadata is byte for byte what Rust 0.95 writes: a statistic without options, such as the null count, carries an empty options field. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A low-cardinality decimal column is written as a dict layout, as Rust 0.95 writes it. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A nullable column's validity is compressed as Rust 0.95 compresses it, run-end or sparse where that is smaller, instead of always a plain bitmap. ([#768](https://github.com/dfa1/vortex-java/pull/768))
+- An integer chunk can be dictionary-encoded inside its compression, as Rust 0.95 allows everywhere but a dict layout's codes. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A decimal column that Rust 0.95 writes as a dict layout now reads its values instead of failing. ([#763](https://github.com/dfa1/vortex-java/pull/763))
 - A list, fixed-size list, map or struct column that Rust 0.95 writes as a constant or sparse chunk now reads its values instead of failing. ([#762](https://github.com/dfa1/vortex-java/pull/762))
 - A string column whose first 8192 rows hold a single value is written as plain chunks, as Rust does, instead of a dict layout up to 9% bigger. ([#722](https://github.com/dfa1/vortex-java/issues/722))
