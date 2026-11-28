@@ -202,9 +202,10 @@ class BitpackedEncodingPatchesTest {
             EncodeResult result = ENCODER.encode(DTypes.I32.asNullable(), new NullableData(values, validity),
                     EncodeTestHelper.testCtx());
 
-            // Then only the validity child, no patches
+            // Then only the validity child, no patches: one null in 2000 rows is a sparse bitmap,
+            // as Rust 0.95 compresses it
             assertThat(metadata(result).patches()).isNull();
-            assertThat(childIds(result)).containsExactly(EncodingId.VORTEX_BOOL);
+            assertThat(childIds(result)).containsExactly(EncodingId.VORTEX_SPARSE);
         }
 
         /// FoR shifts every slot by the minimum: a null slot's zero placeholder in a column of

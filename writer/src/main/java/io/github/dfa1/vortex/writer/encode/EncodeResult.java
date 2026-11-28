@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
@@ -81,22 +80,33 @@ public record EncodeResult(
         return new EncodeResult(root, encodedBuffers, statsMin, statsMax);
     }
 
-    /// This result with `validity` appended to the root as its last child, a plain `vortex.bool`:
-    /// where Rust's primitive and bit-packed arrays keep the validity of a nullable array, which
-    /// the encodings stacked above them (FoR, ZigZag, dict codes) pass down unchanged.
+    /// This result with `validity` appended to the root as its last child, compressed as Rust 0.95
+    /// compresses a bitmap ([BitmapCompressor]): where Rust's primitive and bit-packed arrays keep
+    /// the validity of a nullable array, which the encodings stacked above them (FoR, ZigZag, dict
+    /// codes) pass down unchanged.
     ///
     /// @param validity per-row validity
     /// @param ctx      the encode context
-    /// @return a copy of this result with the validity child and its buffer
+    /// @return a copy of this result with the validity child and its buffers
     EncodeResult withValidity(boolean[] validity, EncodeContext ctx) {
-        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
+        EncodeResult bool = BitmapCompressor.compress(validity, ctx);
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
-        children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size())
-                .withStats(CachedNodeStats.ofValidity(validity));
+        children[children.length - 1] = validityNode(
+                EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size()), validity);
         List<EncodedBuffer> buffers = new ArrayList<>(encodedBuffers);
         buffers.addAll(bool.encodedBuffers());
         EncodeNode root = new EncodeNode(rootNode.encodingId(), rootNode.metadata(), children, rootNode.bufferIndices());
         return new EncodeResult(root, List.copyOf(buffers), statsMin, statsMax);
+    }
+
+    /// A validity child's node: a plain bitmap carries the stats Rust's bool array holds; a
+    /// compressed one (run-end, sparse) carries none, since Rust's compressor sets none on what it
+    /// builds.
+    static EncodeNode validityNode(EncodeNode node, boolean[] validity) {
+        if (!node.encodingId().equals(EncodingId.VORTEX_BOOL)) {
+            return node;
+        }
+        return node.withStats(CachedNodeStats.ofValidity(validity));
     }
 
     /// Returns `true` if both `statsMin` and `statsMax` are present.

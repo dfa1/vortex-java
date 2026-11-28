@@ -46,8 +46,8 @@ public record CascadeStep(
                 : new CascadeStep(partialRoot, ownedBuffers, openChildren, stats.min(), stats.max(), applicable);
     }
 
-    /// This step with `validity` appended to the root as its last child, a plain `vortex.bool`, as
-    /// `EncodeResult.withValidity` does for a result: where Rust's string
+    /// This step with `validity` appended to the root as its last child, compressed as Rust 0.95
+    /// compresses a bitmap, as `EncodeResult.withValidity` does for a result: where Rust's string
     /// encodings (FSST on its codes, OnPair) keep the validity of a nullable array. The bitmap is an
     /// already encoded last slot, so its buffer follows the other children's, in Rust's tree order.
     /// A step that is not applicable is returned unchanged.
@@ -59,8 +59,8 @@ public record CascadeStep(
         if (!applicable) {
             return this;
         }
-        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
-        EncodeResult validityChild = new EncodeResult(bool.rootNode().withStats(CachedNodeStats.ofValidity(validity)),
+        EncodeResult bool = BitmapCompressor.compress(validity, ctx);
+        EncodeResult validityChild = new EncodeResult(EncodeResult.validityNode(bool.rootNode(), validity),
                 bool.encodedBuffers(), null, null);
         int index = partialRoot.children().length;
         EncodeNode root = new EncodeNode(partialRoot.encodingId(), partialRoot.metadata(),
