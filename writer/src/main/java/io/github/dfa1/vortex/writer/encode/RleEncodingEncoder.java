@@ -139,12 +139,16 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 EncodedBuffer.of(offsetsSeg, offsetsPtype)), null, null).withStats(stats);
     }
 
-    /// Barred from the indices and offsets children (issue #410, Rust's `rle_descendant_exclusions`):
-    /// Dict and Sparse cannot pay off on per-chunk run positions or monotone offsets. Rust keeps a
-    /// RunEnd rule there commented out as unsound, so RunEnd is not barred. RLE names itself, as
-    /// Rust's compressor never repeats a scheme within one chain.
+    /// Barred from the offsets child (issue #410, Rust's `rle_descendant_exclusions`): Dict and
+    /// Sparse cannot pay off on monotone offsets. RLE names itself, as Rust's compressor never
+    /// repeats a scheme within one chain.
     private static final Set<EncodingId> POSITIONS_EXCLUDED =
             Set.of(EncodingId.FASTLANES_RLE, EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);
+
+    /// Barred from the indices child: the offsets' rules, and from Rust 0.95 also RunEnd, which
+    /// would run-length encode already run-length encoded indices.
+    private static final Set<EncodingId> INDICES_EXCLUDED = Set.of(EncodingId.FASTLANES_RLE,
+            EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_RUNEND);
 
     /// Barred from the values child: only RLE itself (no rule upstream).
     private static final Set<EncodingId> VALUES_EXCLUDED = Set.of(EncodingId.FASTLANES_RLE);
@@ -192,7 +196,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         long[] values = Arrays.copyOf(runs.values(), runs.valuesCount());
         List<ChildSlot> slots = List.of(
                 new ChildSlot(dtype, PrimitiveArrays.fromBitsArray(values, ptype, EncodingId.FASTLANES_RLE), 0, VALUES_EXCLUDED),
-                new ChildSlot(new DType.Primitive(indicesPtype, validity != null), indicesData, 1, POSITIONS_EXCLUDED),
+                new ChildSlot(new DType.Primitive(indicesPtype, validity != null), indicesData, 1, INDICES_EXCLUDED),
                 new ChildSlot(new DType.Primitive(offsetsPtype, false),
                         PrimitiveArrays.fromLongsArray(offsets, offsetsPtype, EncodingId.FASTLANES_RLE), 2,
                         POSITIONS_EXCLUDED));
