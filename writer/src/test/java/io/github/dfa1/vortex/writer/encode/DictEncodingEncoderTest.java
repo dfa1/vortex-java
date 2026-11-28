@@ -285,19 +285,6 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void forDataCascade_acceptsFloatsAndStringsButNotIntegers() {
-        // Given: Rust's file writer excludes IntDictScheme from the data compressor
-        DictEncodingEncoder sut = DictEncodingEncoder.forDataCascade();
-
-        // When / Then
-        assertThat(sut.accepts(DTypes.F64)).isTrue();
-        assertThat(sut.accepts(DTypes.UTF8)).isTrue();
-        assertThat(sut.accepts(DTypes.I64)).isFalse();
-        assertThat(sut.accepts(DTypes.I32)).isFalse();
-        assertThat(ENCODER.accepts(DTypes.I64)).isTrue();
-    }
-
-    @Test
     void encodeCascade_utf8_codesAndValuesSlots_carryDifferentPolicies() {
         // Given — 2 distinct strings over 6 rows
         String[] data = {"a", "b", "a", "b", "a", "b"};

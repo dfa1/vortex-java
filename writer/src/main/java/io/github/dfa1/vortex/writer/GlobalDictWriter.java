@@ -30,6 +30,9 @@ import java.util.Set;
 /// themselves are built by [LayoutTree] from [#written()].
 final class GlobalDictWriter {
 
+    // Rust's codes compressor: its full compressor without IntDictScheme.
+    private static final Set<EncodingId> NO_DICT = Set.of(EncodingId.VORTEX_DICT);
+
     /// Where a demoted column's buffered chunks go: the writer's per-chunk path.
     @FunctionalInterface
     interface ChunkAppender {
@@ -303,7 +306,8 @@ final class GlobalDictWriter {
 
     // The buffered codes are already the wire codes: first-seen order, null included. Rust's dict
     // strategy coalesces the codes like any data column, so U16 codes chunk at 512Ki rows; the
-    // legacy zone map keeps one code chunk per batch, its zones.
+    // legacy zone map keeps one code chunk per batch, its zones. The codes compress without a
+    // dictionary, as Rust's codes compressor leaves IntDictScheme out (vortex-file strategy.rs).
     private void writeGlobalDictCodes(ColumnName colName, DictColumnState state, int valuesSegIdx) throws IOException {
         DType codesDtype = new DType.Primitive(state.codesPType(), false);
         List<Integer> codesSegIdxes = new ArrayList<>();
@@ -322,12 +326,12 @@ final class GlobalDictWriter {
             }
             List<Object> ready = repartitioner != null ? repartitioner.add(codes, buffered.length) : List.of(codes);
             for (Object chunk : ready) {
-                codesSegIdxes.add(sink.write(colName, codesDtype, chunk, null, Set.of()));
+                codesSegIdxes.add(sink.write(colName, codesDtype, chunk, null, NO_DICT));
                 codesRowCounts.add((long) RowCount.of(chunk));
             }
         }
         for (Object last : repartitioner != null ? repartitioner.finish() : List.of()) {
-            codesSegIdxes.add(sink.write(colName, codesDtype, last, null, Set.of()));
+            codesSegIdxes.add(sink.write(colName, codesDtype, last, null, NO_DICT));
             codesRowCounts.add((long) RowCount.of(last));
         }
         dictColRefs.computeIfAbsent(colName, _ -> new ArrayList<>()).add(new DictColRef(valuesSegIdx, state.cardinality(),
